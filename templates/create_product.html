@@ -1,0 +1,28 @@
+<form action="/create-product" method="POST" enctype="multipart/form-data">
+    <div>
+        <label for="SubcategorieId">Subcategory ID:</label>
+        <input type="number" name="SubcategorieId" id="SubcategorieId">
+    </div>
+
+    <div>
+        <label for="Imagine">Product Image:</label>
+        <input type="file" name="Imagine" id="Imagine" accept="image/*">
+    </div>
+
+    <div>
+        <label for="Stoc">Stock (Stoc):</label>
+        <input type="number" name="Stoc" id="Stoc" required>
+    </div>
+
+    <div>
+        <label for="Pret">Price (Pret):</label>
+        <input type="number" name="Pret" id="Pret" step="0.01" required>
+    </div>
+
+    <div>
+        <label for="Descriere">Description:</label>
+        <textarea name="Descriere" id="Descriere" maxlength="200" required></textarea>
+    </div>
+
+    <button type="submit">Create Product</button>
+</form>

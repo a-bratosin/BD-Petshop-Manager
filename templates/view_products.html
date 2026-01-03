@@ -1,0 +1,39 @@
+<h2>Product Inventory</h2>
+
+<table border="1" cellpadding="10">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Image</th>
+            <th>Description</th>
+            <th>Subcategory</th>
+            <th>Price</th>
+            <th>Stock</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for product in products %}
+        <tr>
+            <td>{{ product.id }}</td>
+            <td>
+                {% if product.image %}
+                    <img src="data:image/jpeg;base64,{{ product.image }}" alt="Product Image" style="width: 100px; height: auto;">
+                {% else %}
+                    No Image
+                {% endif %}
+            </td>
+            <td>{{ product.descriere }}</td>
+            <td>{{ product.sub_id if product.sub_id else 'N/A' }}</td>
+            <td>${{ "{:,.2f}".format(product.pret) }}</td>
+            <td>{{ product.stoc }}</td>
+            <td>
+                <a href="/edit-product/{{ product.id }}">Edit</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<br>
+<a href="/create-product">Add New Product</a>

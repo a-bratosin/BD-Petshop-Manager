@@ -1,7 +1,7 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from os import getenv
 from dotenv import load_dotenv
-from pyodbc import connect
+from pyodbc import connect, Binary
 import hashlib
 
 # FORMAT: UID is the user, PWD is the password
@@ -13,6 +13,40 @@ print("Connected!")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = getenv("SESSION_KEY")
+@app.route('/create-category', methods=['GET', 'POST'])
+def create_category():
+    # 1. Session Check: Verify if logged in
+    if not session.get('loggedin'):
+        flash("Please log in to access this page.")
+        return redirect(url_for('login'))
+
+    # 2. Session Check: Verify if role is 'employee'
+    if session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        try:
+            nume_categorie = request.form.get('NumeCategorie')
+            if not nume_categorie:
+                flash("Category name is required.")
+                return redirect(request.url)
+            cursor = conn.cursor()
+            query = """
+                INSERT INTO dbo.Categorie (NumeCategorie)
+                VALUES (?)
+            """
+            cursor.execute(query, (nume_categorie,))
+            conn.commit()
+            flash("Category created successfully!")
+            return redirect(url_for('create_category'))
+        except Exception as e:
+            conn.rollback()
+            flash(f"An error occurred: {str(e)}")
+            return redirect(request.url)
+
+    return render_template('create_category.html')
+
 
 @app.route("/")
 def hello_world():
@@ -33,6 +67,8 @@ def login():
             session['loggedin'] = True
             session['id'] = account[0]
             session['username'] = account[1]
+            session['role'] = account[2].strip()
+            print(session)
             return render_template('index.html', msg='Logged in successfully!')
         else:
             msg = 'Incorrect username/password!'
@@ -45,3 +81,86 @@ def logout():
     session.pop('id', None)
     session.pop('username', None)
     return redirect(url_for('login'))
+
+@app.route('/create-product', methods=['GET', 'POST'])
+def create_produs():
+    # 1. Session Check: Verify if logged in
+    if not session.get('loggedin'):
+        flash("Please log in to access this page.")
+        return redirect(url_for('login'))
+
+    # 2. Session Check: Verify if role is 'employee'
+    if session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        try:
+            # Extract data from the form
+            # Use None if SubcategorieId is empty to handle 'Allow Nulls'
+            sub_id = request.form.get('SubcategorieId') or None
+            stoc = request.form.get('Stoc')
+            pret = request.form.get('Pret')
+            descriere = request.form.get('Descriere')
+
+            # Handle the Image file (convert to binary for SQL 'image' type)
+            file = request.files.get('Imagine')
+            image_binary = None
+            if file and file.filename != '':
+                image_binary = file.read()
+
+            # Database Insertion
+            cursor = conn.cursor()
+            query = """
+                INSERT INTO dbo.Produs (SubcategorieId, Imagine, Stoc, Pret, Descriere)
+                VALUES (?, ?, ?, ?, ?)
+            """
+            cursor.execute(query, (sub_id, Binary(image_binary) if image_binary else None, stoc, pret, descriere))
+            conn.commit()
+            
+            flash("Product created successfully!")
+            return redirect(url_for('view_products')) # Redirect to your product list
+
+        except Exception as e:
+            conn.rollback()
+            flash(f"An error occurred: {str(e)}")
+            return redirect(request.url)
+
+    # If GET, just show the form
+    return render_template('create_product.html')
+
+
+import base64
+
+@app.route('/view-products')
+def view_products():
+    # Session Checks
+    if not session.get('loggedin'):
+        return redirect(url_for('login'))
+    
+    if session.get('role') != 'employee':
+        print(f"\'{session.get('role')}\'")
+        flash("Access denied.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT ProdusId, SubcategorieId, Imagine, Stoc, Pret, Descriere FROM dbo.Produs")
+    rows = cursor.fetchall()
+
+    products = []
+    for row in rows:
+        # Convert binary image to Base64 string for display
+        image_base64 = None
+        if row.Imagine:
+            image_base64 = base64.b64encode(row.Imagine).decode('utf-8')
+
+        products.append({
+            "id": row.ProdusId,
+            "sub_id": row.SubcategorieId,
+            "image": image_base64,
+            "stoc": row.Stoc,
+            "pret": row.Pret,
+            "descriere": row.Descriere
+        })
+
+    return render_template('view_products.html', products=products)
