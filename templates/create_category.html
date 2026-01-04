@@ -1,7 +1,16 @@
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        <ul class="flashes">
+            {% for message in messages %}
+                <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+{% endwith %}
 <form action="/create-category" method="POST">
     <div>
-        <label for="NumeCategorie">Category Name:</label>
-        <input type="text" name="NumeCategorie" id="NumeCategorie" required>
+        <label for="CategorieNume">Category Name:</label>
+        <input type="text" name="CategorieNume" id="CategorieNume" required>
     </div>
     <button type="submit">Create Category</button>
 </form>

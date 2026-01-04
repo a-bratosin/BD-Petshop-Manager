@@ -1,0 +1,50 @@
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<h1>Add New Customer</h1>
+<form action="/create-customer" method="POST">
+    <div>
+        <label for="Nume">First Name:</label>
+        <input type="text" name="Nume" id="Nume" required>
+    </div>
+    <div>
+        <label for="Prenume">Last Name:</label>
+        <input type="text" name="Prenume" id="Prenume" required>
+    </div>
+    <div>
+        <label for="Telefon">Phone:</label>
+        <input type="text" name="Telefon" id="Telefon" required>
+    </div>
+    <div>
+        <label for="Email">Email:</label>
+        <input type="email" name="Email" id="Email" required>
+    </div>
+    <div>
+      <label for="Strada">Street:</label>
+      <input type="text" name="Strada" id="Strada" required>
+    </div>
+    <div>
+      <label for="Numar">Number:</label>
+      <input type="text" name="Numar" id="Numar" required>
+    </div>
+    <div>
+      <label for="Oras">City:</label>
+      <input type="text" name="Oras" id="Oras" required>
+    </div>
+    <div>
+      <label for="Judet">County:</label>
+      <input type="text" name="Judet" id="Judet" required>
+    </div>
+    <div>
+      <label for="CodPostal">Postal Code:</label>
+      <input type="text" name="CodPostal" id="CodPostal" required>
+    </div>
+    <button type="submit">Add Customer</button>
+</form>

@@ -1,0 +1,25 @@
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<form action="/create-subcategory" method="POST">
+    <div>
+        <label for="SubcategorieNume">Subcategory Name:</label>
+        <input type="text" name="SubcategorieNume" id="SubcategorieNume" required>
+    </div>
+    <div>
+        <label for="CategorieId">Category:</label>
+        <select name="CategorieId" id="CategorieId" required>
+            {% for category in categories %}
+                <option value="{{ category.id }}">{{ category.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <button type="submit">Create Subcategory</button>
+</form>

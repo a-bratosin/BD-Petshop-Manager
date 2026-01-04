@@ -1,7 +1,33 @@
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
 <form action="/create-product" method="POST" enctype="multipart/form-data">
     <div>
-        <label for="SubcategorieId">Subcategory ID:</label>
-        <input type="number" name="SubcategorieId" id="SubcategorieId">
+        <label for="CategorieId">Category:</label>
+        <select name="CategorieId" id="CategorieId" required>
+            <option value="">Select a category</option>
+            {% for category in categories %}
+                <option value="{{ category.id }}">{{ category.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div>
+        <label for="SubcategorieId">Subcategory:</label>
+        <select name="SubcategorieId" id="SubcategorieId" required>
+            <option value="">Select a subcategory</option>
+            {% for subcategory in subcategories %}
+                <option value="{{ subcategory.id }}" data-category="{{ subcategory.categorie_id }}">{{ subcategory.name }}</option>
+            {% endfor %}
+        </select>
     </div>
 
     <div>
@@ -26,3 +52,29 @@
 
     <button type="submit">Create Product</button>
 </form>
+
+<script>
+// Filter subcategories based on selected category
+document.addEventListener('DOMContentLoaded', function() {
+    const categorySelect = document.getElementById('CategorieId');
+    const subcategorySelect = document.getElementById('SubcategorieId');
+    const allOptions = Array.from(subcategorySelect.options);
+
+    categorySelect.addEventListener('change', function() {
+        const selectedCategory = this.value;
+        subcategorySelect.innerHTML = '';
+        // Add default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select a subcategory';
+        subcategorySelect.appendChild(defaultOption);
+        // Add only matching subcategories
+        allOptions.forEach(function(option) {
+            if (!option.value) return; // skip default
+            if (option.getAttribute('data-category') === selectedCategory) {
+                subcategorySelect.appendChild(option.cloneNode(true));
+            }
+        });
+    });
+});
+</script>

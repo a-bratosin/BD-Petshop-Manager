@@ -1,8 +1,10 @@
+# Route for creating a new customer
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from os import getenv
 from dotenv import load_dotenv
 from pyodbc import connect, Binary
 import hashlib
+import base64
 
 # FORMAT: UID is the user, PWD is the password
 load_dotenv()
@@ -13,40 +15,6 @@ print("Connected!")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = getenv("SESSION_KEY")
-@app.route('/create-category', methods=['GET', 'POST'])
-def create_category():
-    # 1. Session Check: Verify if logged in
-    if not session.get('loggedin'):
-        flash("Please log in to access this page.")
-        return redirect(url_for('login'))
-
-    # 2. Session Check: Verify if role is 'employee'
-    if session.get('role') != 'employee':
-        flash("Unauthorized: This action requires employee privileges.")
-        return redirect(url_for('login'))
-
-    if request.method == 'POST':
-        try:
-            nume_categorie = request.form.get('NumeCategorie')
-            if not nume_categorie:
-                flash("Category name is required.")
-                return redirect(request.url)
-            cursor = conn.cursor()
-            query = """
-                INSERT INTO dbo.Categorie (NumeCategorie)
-                VALUES (?)
-            """
-            cursor.execute(query, (nume_categorie,))
-            conn.commit()
-            flash("Category created successfully!")
-            return redirect(url_for('create_category'))
-        except Exception as e:
-            conn.rollback()
-            flash(f"An error occurred: {str(e)}")
-            return redirect(request.url)
-
-    return render_template('create_category.html')
-
 
 @app.route("/")
 def hello_world():
@@ -66,13 +34,24 @@ def login():
         if account:
             session['loggedin'] = True
             session['id'] = account[0]
-            session['username'] = account[1]
+            session['username'] = account[1].strip()
             session['role'] = account[2].strip()
             print(session)
-            return render_template('index.html', msg='Logged in successfully!')
+            # Redirect employee to dashboard
+            if session['role'] == 'employee':
+                return redirect(url_for('employee_dashboard'))
+            else:
+                return render_template('index.html', msg='Logged in successfully!')
         else:
             msg = 'Incorrect username/password!'
     return render_template('login.html', msg=msg)
+# Employee dashboard route
+@app.route('/employee-dashboard')
+def employee_dashboard():
+    if not session.get('loggedin') or session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+    return render_template('employee_dashboard.html')
 
 
 @app.route('/logout')
@@ -80,6 +59,7 @@ def logout():
     session.pop('loggedin', None)
     session.pop('id', None)
     session.pop('username', None)
+    session.pop('role', None)
     return redirect(url_for('login'))
 
 @app.route('/create-product', methods=['GET', 'POST'])
@@ -94,10 +74,23 @@ def create_produs():
         flash("Unauthorized: This action requires employee privileges.")
         return redirect(url_for('login'))
 
+    cursor = conn.cursor()
+    # Fetch all categories
+    cursor.execute("SELECT CategorieId, CategorieNume FROM dbo.Categorie")
+    categories = [
+        {"id": row.CategorieId, "name": row.CategorieNume}
+        for row in cursor.fetchall()
+    ]
+
+    # Fetch all subcategories
+    cursor.execute("SELECT SubcategorieId, SubcategorieNume, CategorieId FROM dbo.Subcategorie")
+    subcategories = [
+        {"id": row.SubcategorieId, "name": row.SubcategorieNume, "categorie_id": str(row.CategorieId)}
+        for row in cursor.fetchall()
+    ]
+
     if request.method == 'POST':
         try:
-            # Extract data from the form
-            # Use None if SubcategorieId is empty to handle 'Allow Nulls'
             sub_id = request.form.get('SubcategorieId') or None
             stoc = request.form.get('Stoc')
             pret = request.form.get('Pret')
@@ -110,27 +103,101 @@ def create_produs():
                 image_binary = file.read()
 
             # Database Insertion
-            cursor = conn.cursor()
             query = """
                 INSERT INTO dbo.Produs (SubcategorieId, Imagine, Stoc, Pret, Descriere)
                 VALUES (?, ?, ?, ?, ?)
             """
             cursor.execute(query, (sub_id, Binary(image_binary) if image_binary else None, stoc, pret, descriere))
             conn.commit()
-            
             flash("Product created successfully!")
-            return redirect(url_for('view_products')) # Redirect to your product list
+            return redirect(url_for('view_products'))
 
         except Exception as e:
             conn.rollback()
             flash(f"An error occurred: {str(e)}")
             return redirect(request.url)
 
-    # If GET, just show the form
-    return render_template('create_product.html')
+    # If GET, show the form with categories and subcategories
+    return render_template('create_product.html', categories=categories, subcategories=subcategories)
+
+@app.route('/create-subcategory', methods=['GET', 'POST'])
+def create_subcategory():
+    # 1. Session Check: Verify if logged in
+    if not session.get('loggedin'):
+        flash("Please log in to access this page.")
+        return redirect(url_for('login'))
+
+    # 2. Session Check: Verify if role is 'employee'
+    if session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    # Fetch all categories for dropdown
+    cursor.execute("SELECT CategorieId, CategorieNume FROM dbo.Categorie")
+    categories = [
+        {"id": row.CategorieId, "name": row.CategorieNume}
+        for row in cursor.fetchall()
+    ]
+
+    if request.method == 'POST':
+        try:
+            nume_subcategorie = request.form.get('SubcategorieNume')
+            categorie_id = request.form.get('CategorieId')
+            if not nume_subcategorie or not categorie_id:
+                flash("All fields are required.")
+                return redirect(request.url)
+            query = """
+                INSERT INTO dbo.Subcategorie (SubcategorieNume, CategorieId)
+                VALUES (?, ?)
+            """
+            cursor.execute(query, (nume_subcategorie, categorie_id))
+            conn.commit()
+            flash("Subcategory created successfully!")
+            return redirect(url_for('create_subcategory'))
+        except Exception as e:
+            conn.rollback()
+            flash(f"An error occurred: {str(e)}")
+            return redirect(request.url)
+
+    return render_template('create_subcategory.html', categories=categories)
+
+@app.route('/create-category', methods=['GET', 'POST'])
+def create_category():
+    # 1. Session Check: Verify if logged in
+    if not session.get('loggedin'):
+        flash("Please log in to access this page.")
+        return redirect(url_for('login'))
+
+    # 2. Session Check: Verify if role is 'employee'
+    if session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        try:
+            nume_categorie = request.form.get('CategorieNume')
+            if not nume_categorie:
+                flash("Category name is required.")
+                return redirect(request.url)
+            cursor = conn.cursor()
+            query = """
+                INSERT INTO dbo.Categorie (CategorieNume)
+                VALUES (?)
+            """
+            cursor.execute(query, (nume_categorie,))
+            conn.commit()
+            flash("Category created successfully!")
+            return redirect(url_for('create_category'))
+        except Exception as e:
+            conn.rollback()
+            flash(f"An error occurred: {str(e)}")
+            return redirect(request.url)
+
+    return render_template('create_category.html')
 
 
-import base64
+
 
 @app.route('/view-products')
 def view_products():
