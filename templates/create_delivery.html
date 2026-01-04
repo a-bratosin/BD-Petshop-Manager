@@ -1,0 +1,129 @@
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<h1>Create Delivery</h1>
+
+<form id="delivery-form" action="/create-delivery" method="POST">
+  <div>
+    <label for="DistributorName">Distributor Name:</label>
+    <input type="text" name="DistributorName" id="DistributorName" list="distributor-list" required>
+  </div>
+
+  <h2>Products</h2>
+  <div id="delivery-items"></div>
+  <button type="button" id="add-item" aria-label="Add product">+</button>
+
+  <div>
+    <strong>Total:</strong>
+    <span id="delivery-total">0.00 lei</span>
+  </div>
+  <div>
+    <strong>Subtotal cost:</strong>
+    <span id="delivery-cost-total">0.00 lei</span>
+  </div>
+
+  <button type="submit">Create Delivery</button>
+</form>
+
+<datalist id="product-list">
+  {% for product in products %}
+    <option value="{{ product.name }}"></option>
+  {% endfor %}
+</datalist>
+
+<datalist id="distributor-list">
+  {% for distributor in distributors %}
+    <option value="{{ distributor.name }}"></option>
+  {% endfor %}
+</datalist>
+
+<script>
+  const products = {{ products | tojson }};
+  const productByName = new Map(
+    products.map((p) => [String(p.name).toLowerCase(), p])
+  );
+
+  const itemsContainer = document.getElementById('delivery-items');
+  const addItemButton = document.getElementById('add-item');
+  const totalEl = document.getElementById('delivery-total');
+  const totalCostEl = document.getElementById('delivery-cost-total');
+
+  function formatMoney(value) {
+    return value.toFixed(2) + ' lei';
+  }
+
+  function updateTotals() {
+    let subtotal = 0;
+    let subtotalCost = 0;
+    const rows = itemsContainer.querySelectorAll('.order-row');
+    rows.forEach((row) => {
+      const nameInput = row.querySelector('.product-name');
+      const qtyInput = row.querySelector('.product-qty');
+      const lineTotalEl = row.querySelector('.line-total');
+
+      const key = nameInput.value.trim().toLowerCase();
+      const product = productByName.get(key);
+      const price = product ? Number(product.price) : 0;
+      const cost = product ? Number(product.cost) : 0;
+      const qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
+
+      const lineTotal = price * qty;
+      lineTotalEl.textContent = formatMoney(lineTotal);
+      subtotal += lineTotal;
+      subtotalCost += cost * qty;
+    });
+
+    totalEl.textContent = formatMoney(subtotal);
+    totalCostEl.textContent = formatMoney(subtotalCost);
+  }
+
+  function addRow() {
+    const row = document.createElement('div');
+    row.className = 'order-row';
+    row.innerHTML = `
+      <input
+        type="text"
+        name="ProductName[]"
+        class="product-name"
+        list="product-list"
+        placeholder="Product name"
+        required
+      >
+      <input
+        type="number"
+        name="ProductQty[]"
+        class="product-qty"
+        min="1"
+        value="1"
+        required
+      >
+      <span class="line-total">0.00 lei</span>
+      <button type="button" class="remove-row" aria-label="Remove item">x</button>
+    `;
+
+    const nameInput = row.querySelector('.product-name');
+    const qtyInput = row.querySelector('.product-qty');
+    const removeButton = row.querySelector('.remove-row');
+
+    nameInput.addEventListener('input', updateTotals);
+    nameInput.addEventListener('change', updateTotals);
+    qtyInput.addEventListener('change', updateTotals);
+    qtyInput.addEventListener('input', updateTotals);
+    removeButton.addEventListener('click', () => {
+      row.remove();
+      updateTotals();
+    });
+
+    itemsContainer.appendChild(row);
+    updateTotals();
+  }
+
+  addItemButton.addEventListener('click', addRow);
+</script>
