@@ -1,0 +1,194 @@
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<h1>Create Order</h1>
+
+<form id="order-form" action="/create-order" method="POST">
+  <div>
+    <label for="CustomerEmail">Customer Email:</label>
+    <input type="email" name="CustomerEmail" id="CustomerEmail" required>
+  </div>
+
+  <h2>Products</h2>
+  <div id="order-items"></div>
+  <button type="button" id="add-item" aria-label="Add product">+</button>
+
+  <div>
+    <strong>Total:</strong>
+    <span id="order-total">0.00 lei</span>
+  </div>
+  <div>
+    <strong>Discount:</strong>
+    <span id="order-discount">0%</span>
+  </div>
+  <div>
+    <strong>Total after discount:</strong>
+    <span id="order-total-final">0.00 lei</span>
+  </div>
+
+  <button type="submit">Create Order</button>
+</form>
+
+<datalist id="product-list">
+  {% for product in products %}
+    <option value="{{ product.name }}"></option>
+  {% endfor %}
+</datalist>
+
+<script>
+  const products = {{ products | tojson }};
+  const productByName = new Map(
+    products.map((p) => [String(p.name).toLowerCase(), p])
+  );
+
+  const itemsContainer = document.getElementById('order-items');
+  const addItemButton = document.getElementById('add-item');
+  const totalEl = document.getElementById('order-total');
+  const discountEl = document.getElementById('order-discount');
+  const finalTotalEl = document.getElementById('order-total-final');
+  const emailInput = document.getElementById('CustomerEmail');
+  let discountPct = 0;
+
+  function formatMoney(value) {
+    return value.toFixed(2) + ' lei';
+  }
+
+  function updateTotals() {
+    let subtotal = 0;
+    const remainingByName = new Map(
+      products.map((p) => [String(p.name).toLowerCase(), Math.max(0, parseInt(p.stock, 10) || 0)])
+    );
+    const rows = itemsContainer.querySelectorAll('.order-row');
+    rows.forEach((row) => {
+      const nameInput = row.querySelector('.product-name');
+      const qtyInput = row.querySelector('.product-qty');
+      const lineTotalEl = row.querySelector('.line-total');
+      const lineStockEl = row.querySelector('.line-stock');
+
+      const key = nameInput.value.trim().toLowerCase();
+      const product = productByName.get(key);
+      const price = product ? Number(product.price) : 0;
+      let qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
+      if (product) {
+        const totalStock = Math.max(0, parseInt(product.stock, 10) || 0);
+        let remaining = remainingByName.get(key);
+        if (remaining === undefined) {
+          remaining = totalStock;
+        }
+        qtyInput.max = String(remaining);
+        if (remaining === 0) {
+          qtyInput.min = '0';
+          qty = 0;
+          qtyInput.value = '0';
+        } else {
+          qtyInput.min = '1';
+          qty = Math.min(qty, remaining);
+          qtyInput.value = String(qty);
+        }
+        remainingByName.set(key, Math.max(0, remaining - qty));
+      } else {
+        qtyInput.removeAttribute('max');
+        qtyInput.min = '1';
+      }
+
+      const lineTotal = price * qty;
+      lineTotalEl.textContent = formatMoney(lineTotal);
+      if (lineStockEl) {
+        if (product) {
+          const totalStock = Math.max(0, parseInt(product.stock, 10) || 0);
+          lineStockEl.textContent = 'In stock: ' + totalStock;
+        } else {
+          lineStockEl.textContent = '';
+        }
+      }
+      subtotal += lineTotal;
+    });
+
+    const discountAmount = subtotal * (discountPct / 100);
+    const finalTotal = subtotal - discountAmount;
+
+    totalEl.textContent = formatMoney(subtotal);
+    discountEl.textContent = discountPct + '%';
+    finalTotalEl.textContent = formatMoney(finalTotal);
+  }
+
+  function addRow() {
+    const row = document.createElement('div');
+    row.className = 'order-row';
+    row.innerHTML = `
+      <input
+        type="text"
+        name="ProductName[]"
+        class="product-name"
+        list="product-list"
+        placeholder="Product name"
+        required
+      >
+      <input
+        type="number"
+        name="ProductQty[]"
+        class="product-qty"
+        min="1"
+        value="1"
+        required
+      >
+      <span class="line-stock"></span>
+      <span class="line-total">0.00 lei</span>
+      <button type="button" class="remove-row" aria-label="Remove item">x</button>
+    `;
+
+    const nameInput = row.querySelector('.product-name');
+    const qtyInput = row.querySelector('.product-qty');
+    const removeButton = row.querySelector('.remove-row');
+
+    nameInput.addEventListener('input', updateTotals);
+    nameInput.addEventListener('change', updateTotals);
+    qtyInput.addEventListener('change', updateTotals);
+    qtyInput.addEventListener('input', updateTotals);
+    removeButton.addEventListener('click', () => {
+      row.remove();
+      updateTotals();
+    });
+
+    itemsContainer.appendChild(row);
+    updateTotals();
+  }
+
+  addItemButton.addEventListener('click', addRow);
+
+  async function fetchDiscount() {
+    const email = emailInput.value.trim();
+    if (!email) {
+      discountPct = 0;
+      updateTotals();
+      return;
+    }
+
+    try {
+      const response = await fetch(`/loyalty-discount?email=${encodeURIComponent(email)}`);
+      console.log(response)
+      if (!response.ok) {
+        discountPct = 0;
+        updateTotals();
+        return;
+      }
+      const data = await response.json();
+      console.log(data)
+      discountPct = Number(data.discount_pct) || 0;
+      updateTotals();
+    } catch (error) {
+      discountPct = 0;
+      updateTotals();
+    }
+  }
+
+  emailInput.addEventListener('change', fetchDiscount);
+  emailInput.addEventListener('blur', fetchDiscount);
+</script>

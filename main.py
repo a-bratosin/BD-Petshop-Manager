@@ -1,5 +1,5 @@
 # Route for creating a new customer
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from os import getenv
 from dotenv import load_dotenv
 from pyodbc import connect, Binary
@@ -233,11 +233,11 @@ def create_customer():
             return redirect(request.url)
     
         cursor = conn.cursor()
-        # Check if customer already exists (by email or phone)
-        cursor.execute("SELECT COUNT(*) FROM dbo.Client WHERE ClientEmail = ? OR ClientTelefon = ?", (email, telefon))
+        # Check if customer already exists (by phone)
+        cursor.execute("SELECT COUNT(*) FROM dbo.Client WHERE ClientTelefon = ?", (telefon,))
         exists = cursor.fetchone()[0]
         if exists:
-            flash("A customer with this email or phone already exists.")
+            flash("A customer with this phone already exists.")
             return redirect(request.url)
         
         # Check if user already exists (by username/address)
@@ -258,11 +258,11 @@ def create_customer():
             print(user_id)
             # Insert customer with UserId
             query = """
-                INSERT INTO dbo.Client (UserId, ClientNume, ClientPrenume, ClientEmail, ClientTelefon, ClientStrada, ClientNumar, ClientOras, ClientJudet)
+                INSERT INTO dbo.Client (UserId, ClientNume, ClientPrenume, ClientTelefon, ClientStrada, ClientNumar, ClientOras, ClientJudet)
                 OUTPUT INSERTED.ClientId
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """
-            cursor.execute(query, (user_id, nume, prenume, email, telefon, strada, numar, oras, judet))
+            cursor.execute(query, (user_id, nume, prenume, telefon, strada, numar, oras, judet))
             client_id = cursor.fetchone()[0]
 
             # Check if Card de fidelitate is requested
@@ -283,6 +283,208 @@ def create_customer():
             return redirect(request.url)
 
     return render_template('create_customer.html')
+
+
+
+@app.route('/create-order', methods=['GET', 'POST'])
+def create_order():
+    if not session.get('loggedin') or session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT ProdusId, Descriere, Pret, Stoc FROM dbo.Produs")
+    products = [
+        {
+            "id": row.ProdusId,
+            "name": row.Descriere,
+            "price": float(row.Pret),
+            "stock": int(row.Stoc) if row.Stoc is not None else 0,
+        }
+        for row in cursor.fetchall()
+        if row.Descriere
+    ]
+
+    if request.method == 'POST':
+        email = request.form.get('CustomerEmail', '').strip()
+        product_names = [name.strip() for name in request.form.getlist('ProductName[]') if name.strip()]
+        product_qtys = [qty.strip() for qty in request.form.getlist('ProductQty[]') if qty.strip()]
+
+        if not email:
+            flash("Customer email is required.")
+            return redirect(request.url)
+
+        if not product_names or not product_qtys or len(product_names) != len(product_qtys):
+            flash("Please add at least one product with a quantity.")
+            return redirect(request.url)
+
+        try:
+            order_items = []
+            for name, qty_raw in zip(product_names, product_qtys):
+                qty = int(qty_raw)
+                if qty <= 0:
+                    flash("Product quantities must be positive numbers.")
+                    return redirect(request.url)
+                order_items.append((name, qty))
+        except ValueError:
+            flash("Product quantities must be numbers.")
+            return redirect(request.url)
+
+        try:
+            # Resolve client by user email (Username)
+            cursor.execute(
+                """
+                SELECT c.ClientId
+                FROM dbo.Client c
+                JOIN dbo.Utilizatori u ON u.UserId = c.UserId
+                WHERE u.Username = ?
+                """,
+                (email,)
+            )
+            client_row = cursor.fetchone()
+            if not client_row:
+                flash("No customer found for this email address.")
+                return redirect(request.url)
+            client_id = client_row[0]
+
+            # Resolve employee id from logged in user
+            cursor.execute(
+                "SELECT AngajatId FROM dbo.Angajat WHERE UserId = ?",
+                (session.get('id'),)
+            )
+            angajat_row = cursor.fetchone()
+            if not angajat_row:
+                flash("Employee record not found.")
+                return redirect(request.url)
+            angajat_id = angajat_row[0]
+
+            # Aggregate quantities by product name
+            requested = {}
+            for name, qty in order_items:
+                key = name.strip()
+                requested[key] = requested.get(key, 0) + qty
+
+            # Fetch products by name and validate stock
+            placeholders = ",".join("?" for _ in requested)
+            cursor.execute(
+                f"""
+                SELECT ProdusId, Descriere, Stoc
+                FROM dbo.Produs
+                WHERE Descriere IN ({placeholders})
+                """,
+                tuple(requested.keys())
+            )
+            product_rows = cursor.fetchall()
+            products_by_name = {row.Descriere: (row.ProdusId, int(row.Stoc) if row.Stoc is not None else 0) for row in product_rows}
+
+            missing = [name for name in requested.keys() if name not in products_by_name]
+            if missing:
+                flash("Some products no longer exist. Please reselect the items.")
+                return redirect(request.url)
+
+            for name, qty in requested.items():
+                _, stock = products_by_name[name]
+                if qty > stock:
+                    flash(f"Insufficient stock for '{name}'. Available: {stock}.")
+                    return redirect(request.url)
+
+            # Create order and order items
+            from datetime import datetime
+            now = datetime.now()
+
+            cursor.execute(
+                """
+                SELECT DataInregistrarii
+                FROM dbo.CardFidelitate
+                WHERE ClientId = ?
+                """,
+                (client_id,)
+            )
+            card_row = cursor.fetchone()
+            discount_pct = None
+            if card_row and card_row[0]:
+                days_active = (now - card_row[0]).days
+                years_active = days_active / 365.25
+                if years_active > 5:
+                    discount_pct = 7
+                elif years_active > 2:
+                    discount_pct = 3
+
+            cursor.execute(
+                """
+                INSERT INTO dbo.Comanda (ComandaData, ClientId, AngajatId, ReducereLoialitate)
+                OUTPUT INSERTED.ComandaId
+                VALUES (?, ?, ?, ?)
+                """,
+                (now, client_id, angajat_id, discount_pct)
+            )
+            comanda_id = cursor.fetchone()[0]
+
+            for name, qty in requested.items():
+                produs_id, stock = products_by_name[name]
+                cursor.execute(
+                    """
+                    INSERT INTO dbo.ProdusComanda (ProdusId, ComandaId, ProdusComandaCantitate)
+                    VALUES (?, ?, ?)
+                    """,
+                    (produs_id, comanda_id, qty)
+                )
+                cursor.execute(
+                    "UPDATE dbo.Produs SET Stoc = ? WHERE ProdusId = ?",
+                    (stock - qty, produs_id)
+                )
+
+            conn.commit()
+            if discount_pct:
+                flash(f"Loyalty discount applied: {discount_pct}%")
+            flash("Order created successfully!")
+            return redirect(url_for('create_order'))
+        except Exception as e:
+            conn.rollback()
+            flash(f"An error occurred: {str(e)}")
+            return redirect(request.url)
+
+    return render_template('create_order.html', products=products)
+
+
+@app.route('/loyalty-discount')
+def loyalty_discount():
+    if not session.get('loggedin') or session.get('role') != 'employee':
+        return jsonify({"discount_pct": 0})
+
+    
+    email = request.args.get('email', '').strip()
+    if not email:
+        return jsonify({"discount_pct": 0})
+    
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT cf.DataInregistrarii
+        FROM dbo.CardFidelitate cf
+        JOIN dbo.Client c ON c.ClientId = cf.ClientId
+        JOIN dbo.Utilizatori u ON u.UserId = c.UserId
+        WHERE u.Username = ?
+        """,
+        (email,)
+    )
+    row = cursor.fetchone()
+    
+    if not row or not row[0]:
+        return jsonify({"discount_pct": 0})
+
+    from datetime import datetime
+
+    now = datetime.now()
+    years_active = (now - row[0]).days / 365.25
+    if years_active > 5:
+        discount_pct = 7
+    elif years_active > 2:
+        discount_pct = 3
+    else:
+        discount_pct = 0
+
+    return jsonify({"discount_pct": discount_pct})
 
 
 @app.route('/view-products')
