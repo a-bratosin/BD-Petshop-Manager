@@ -1,0 +1,48 @@
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<h1>Order Details</h1>
+
+<p><strong>Order ID:</strong> {{ order.id }}</p>
+<p><strong>Customer:</strong> {{ order.customer_name }}</p>
+<p><strong>Email:</strong> {{ order.email }}</p>
+<p><strong>Date:</strong> {{ order.date }}</p>
+
+{% set subtotal = items | sum(attribute='line_total') %}
+{% set discount_amount = subtotal * (order.discount_pct / 100) %}
+{% set total = subtotal - discount_amount %}
+
+<p><strong>Subtotal:</strong> {{ "{:,.2f} lei".format(subtotal) }}</p>
+<p><strong>Discount:</strong> {{ order.discount_pct }}%</p>
+<p><strong>Total:</strong> {{ "{:,.2f} lei".format(total) }}</p>
+
+<table border="1" cellpadding="10">
+  <thead>
+    <tr>
+      <th>Product</th>
+      <th>Quantity</th>
+      <th>Unit Price</th>
+      <th>Line Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td>{{ item.product }}</td>
+      <td>{{ item.qty }}</td>
+      <td>{{ "{:,.2f} lei".format(item.price) }}</td>
+      <td>{{ "{:,.2f} lei".format(item.line_total) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<br>
+<a href="/order-history">Back to Order History</a>

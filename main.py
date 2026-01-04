@@ -95,6 +95,7 @@ def create_produs():
             sub_id = request.form.get('SubcategorieId') or None
             stoc = request.form.get('Stoc')
             pret = request.form.get('Pret')
+            cost = request.form.get('Cost')
             descriere = request.form.get('Descriere')
 
             # Handle the Image file (convert to binary for SQL 'image' type)
@@ -105,10 +106,10 @@ def create_produs():
 
             # Database Insertion
             query = """
-                INSERT INTO dbo.Produs (SubcategorieId, Imagine, Stoc, Pret, Descriere)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO dbo.Produs (SubcategorieId, Imagine, Stoc, Pret, Descriere, Cost)
+                VALUES (?, ?, ?, ?, ?, ?)
             """
-            cursor.execute(query, (sub_id, Binary(image_binary) if image_binary else None, stoc, pret, descriere))
+            cursor.execute(query, (sub_id, Binary(image_binary) if image_binary else None, stoc, pret, descriere, cost))
             conn.commit()
             flash("Product created successfully!")
             return redirect(url_for('view_products'))
@@ -447,6 +448,334 @@ def create_order():
     return render_template('create_order.html', products=products)
 
 
+@app.route('/create-delivery', methods=['GET', 'POST'])
+def create_delivery():
+    if not session.get('loggedin') or session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT ProdusId, Descriere, Pret, Cost FROM dbo.Produs")
+    products = [
+        {
+            "id": row.ProdusId,
+            "name": row.Descriere,
+            "price": float(row.Pret),
+            "cost": float(row.Cost),
+        }
+        for row in cursor.fetchall()
+        if row.Descriere
+    ]
+
+    cursor.execute("SELECT DistribuitorId, DistribuitorNume FROM dbo.Distribuitor")
+    distributors = [
+        {"id": row.DistribuitorId, "name": row.DistribuitorNume}
+        for row in cursor.fetchall()
+        if row.DistribuitorNume
+    ]
+
+    if request.method == 'POST':
+        distributor_name = request.form.get('DistributorName', '').strip()
+        product_names = [name.strip() for name in request.form.getlist('ProductName[]') if name.strip()]
+        product_qtys = [qty.strip() for qty in request.form.getlist('ProductQty[]') if qty.strip()]
+
+        if not distributor_name:
+            flash("Distributor name is required.")
+            return redirect(request.url)
+
+        if not product_names or not product_qtys or len(product_names) != len(product_qtys):
+            flash("Please add at least one product with a quantity.")
+            return redirect(request.url)
+
+        try:
+            delivery_items = []
+            for name, qty_raw in zip(product_names, product_qtys):
+                qty = int(qty_raw)
+                if qty <= 0:
+                    flash("Product quantities must be positive numbers.")
+                    return redirect(request.url)
+                delivery_items.append((name, qty))
+        except ValueError:
+            flash("Product quantities must be numbers.")
+            return redirect(request.url)
+
+        try:
+            cursor.execute(
+                "SELECT DistribuitorId FROM dbo.Distribuitor WHERE DistribuitorNume = ?",
+                (distributor_name,)
+            )
+            distributor_row = cursor.fetchone()
+            if not distributor_row:
+                flash("No distributor found with this name.")
+                return redirect(request.url)
+            distributor_id = distributor_row[0]
+
+            cursor.execute(
+                "SELECT AngajatId FROM dbo.Angajat WHERE UserId = ?",
+                (session.get('id'),)
+            )
+            angajat_row = cursor.fetchone()
+            if not angajat_row:
+                flash("Employee record not found.")
+                return redirect(request.url)
+            angajat_id = angajat_row[0]
+
+            requested = {}
+            for name, qty in delivery_items:
+                key = name.strip()
+                requested[key] = requested.get(key, 0) + qty
+
+            placeholders = ",".join("?" for _ in requested)
+            cursor.execute(
+                f"""
+                SELECT ProdusId, Descriere
+                FROM dbo.Produs
+                WHERE Descriere IN ({placeholders})
+                """,
+                tuple(requested.keys())
+            )
+            product_rows = cursor.fetchall()
+            products_by_name = {row.Descriere: row.ProdusId for row in product_rows}
+
+            missing = [name for name in requested.keys() if name not in products_by_name]
+            if missing:
+                flash("Some products no longer exist. Please reselect the items.")
+                return redirect(request.url)
+
+            from datetime import datetime
+            now = datetime.now()
+
+            cursor.execute(
+                """
+                INSERT INTO dbo.Livrare (DistribuitorId, DataLivrare, AngajatId)
+                OUTPUT INSERTED.LivrareId
+                VALUES (?, ?, ?)
+                """,
+                (distributor_id, now, angajat_id)
+            )
+            livrare_id = cursor.fetchone()[0]
+
+            for name, qty in requested.items():
+                produs_id = products_by_name[name]
+                cursor.execute(
+                    """
+                    INSERT INTO dbo.ProdusLivrare (ProdusId, LivrareId, ProdusLivrareCantitate)
+                    VALUES (?, ?, ?)
+                    """,
+                    (produs_id, livrare_id, qty)
+                )
+                cursor.execute(
+                    "UPDATE dbo.Produs SET Stoc = Stoc + ? WHERE ProdusId = ?",
+                    (qty, produs_id)
+                )
+
+            conn.commit()
+            flash("Delivery created successfully!")
+            return redirect(url_for('create_delivery'))
+        except Exception as e:
+            conn.rollback()
+            flash(f"An error occurred: {str(e)}")
+            return redirect(request.url)
+
+    return render_template('create_delivery.html', products=products, distributors=distributors)
+
+
+@app.route('/delivery-history')
+def delivery_history():
+    if not session.get('loggedin') or session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            l.LivrareId,
+            d.DistribuitorNume,
+            l.DataLivrare,
+            SUM(pl.ProdusLivrareCantitate * p.Pret) AS TotalPret,
+            SUM(pl.ProdusLivrareCantitate * p.Cost) AS TotalCost
+        FROM dbo.Livrare l
+        JOIN dbo.Distribuitor d ON d.DistribuitorId = l.DistribuitorId
+        LEFT JOIN dbo.ProdusLivrare pl ON pl.LivrareId = l.LivrareId
+        LEFT JOIN dbo.Produs p ON p.ProdusId = pl.ProdusId
+        GROUP BY l.LivrareId, d.DistribuitorNume, l.DataLivrare
+        ORDER BY l.LivrareId DESC
+        """
+    )
+    rows = cursor.fetchall()
+    deliveries = [
+        {
+            "id": row.LivrareId,
+            "distributor": row.DistribuitorNume,
+            "date": row.DataLivrare,
+            "total_price": float(row.TotalPret) if row.TotalPret is not None else 0.0,
+            "total_cost": float(row.TotalCost) if row.TotalCost is not None else 0.0,
+        }
+        for row in rows
+    ]
+
+    return render_template('delivery_history.html', deliveries=deliveries)
+
+
+@app.route('/delivery-details/<int:delivery_id>')
+def delivery_details(delivery_id):
+    if not session.get('loggedin') or session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT l.LivrareId, d.DistribuitorNume, l.DataLivrare
+        FROM dbo.Livrare l
+        JOIN dbo.Distribuitor d ON d.DistribuitorId = l.DistribuitorId
+        WHERE l.LivrareId = ?
+        """,
+        (delivery_id,)
+    )
+    delivery_row = cursor.fetchone()
+    if not delivery_row:
+        flash("Delivery not found.")
+        return redirect(url_for('delivery_history'))
+
+    cursor.execute(
+        """
+        SELECT
+            p.Descriere,
+            pl.ProdusLivrareCantitate,
+            p.Pret,
+            p.Cost
+        FROM dbo.ProdusLivrare pl
+        JOIN dbo.Produs p ON p.ProdusId = pl.ProdusId
+        WHERE pl.LivrareId = ?
+        ORDER BY p.Descriere
+        """,
+        (delivery_id,)
+    )
+    item_rows = cursor.fetchall()
+    items = [
+        {
+            "product": row.Descriere,
+            "qty": row.ProdusLivrareCantitate,
+            "price": float(row.Pret),
+            "cost": float(row.Cost),
+            "line_price": float(row.Pret) * row.ProdusLivrareCantitate,
+            "line_cost": float(row.Cost) * row.ProdusLivrareCantitate,
+        }
+        for row in item_rows
+    ]
+
+    delivery = {
+        "id": delivery_row.LivrareId,
+        "distributor": delivery_row.DistribuitorNume,
+        "date": delivery_row.DataLivrare,
+    }
+
+    return render_template('delivery_details.html', delivery=delivery, items=items)
+
+
+@app.route('/order-history')
+def order_history():
+    if not session.get('loggedin') or session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            c.ComandaId,
+            cl.ClientNume,
+            cl.ClientPrenume,
+            u.Username,
+            SUM(pc.ProdusComandaCantitate * p.Pret) AS TotalPret
+        FROM dbo.Comanda c
+        JOIN dbo.Client cl ON cl.ClientId = c.ClientId
+        JOIN dbo.Utilizatori u ON u.UserId = cl.UserId
+        LEFT JOIN dbo.ProdusComanda pc ON pc.ComandaId = c.ComandaId
+        LEFT JOIN dbo.Produs p ON p.ProdusId = pc.ProdusId
+        GROUP BY c.ComandaId, cl.ClientNume, cl.ClientPrenume, u.Username
+        ORDER BY c.ComandaId DESC
+        """
+    )
+    rows = cursor.fetchall()
+    orders = [
+        {
+            "id": row.ComandaId,
+            "customer_name": f"{row.ClientNume} {row.ClientPrenume}",
+            "email": row.Username,
+            "total_price": float(row.TotalPret) if row.TotalPret is not None else 0.0,
+        }
+        for row in rows
+    ]
+
+    return render_template('order_history.html', orders=orders)
+
+
+@app.route('/order-details/<int:order_id>')
+def order_details(order_id):
+    if not session.get('loggedin') or session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            c.ComandaId,
+            c.ComandaData,
+            c.ReducereLoialitate,
+            cl.ClientNume,
+            cl.ClientPrenume,
+            u.Username
+        FROM dbo.Comanda c
+        JOIN dbo.Client cl ON cl.ClientId = c.ClientId
+        JOIN dbo.Utilizatori u ON u.UserId = cl.UserId
+        WHERE c.ComandaId = ?
+        """,
+        (order_id,)
+    )
+    order_row = cursor.fetchone()
+    if not order_row:
+        flash("Order not found.")
+        return redirect(url_for('order_history'))
+
+    cursor.execute(
+        """
+        SELECT
+            p.Descriere,
+            pc.ProdusComandaCantitate,
+            p.Pret
+        FROM dbo.ProdusComanda pc
+        JOIN dbo.Produs p ON p.ProdusId = pc.ProdusId
+        WHERE pc.ComandaId = ?
+        ORDER BY p.Descriere
+        """,
+        (order_id,)
+    )
+    item_rows = cursor.fetchall()
+    items = [
+        {
+            "product": row.Descriere,
+            "qty": row.ProdusComandaCantitate,
+            "price": float(row.Pret),
+            "line_total": float(row.Pret) * row.ProdusComandaCantitate,
+        }
+        for row in item_rows
+    ]
+
+    order = {
+        "id": order_row.ComandaId,
+        "date": order_row.ComandaData,
+        "customer_name": f"{order_row.ClientNume} {order_row.ClientPrenume}",
+        "email": order_row.Username,
+        "discount_pct": int(order_row.ReducereLoialitate) if order_row.ReducereLoialitate is not None else 0,
+    }
+
+    return render_template('order_details.html', order=order, items=items)
+
+
 @app.route('/loyalty-discount')
 def loyalty_discount():
     if not session.get('loggedin') or session.get('role') != 'employee':
@@ -499,7 +828,22 @@ def view_products():
         return redirect(url_for('login'))
 
     cursor = conn.cursor()
-    cursor.execute("SELECT ProdusId, SubcategorieId, Imagine, Stoc, Pret, Descriere FROM dbo.Produs")
+    cursor.execute(
+        """
+        SELECT
+            p.ProdusId,
+            p.SubcategorieId,
+            p.Imagine,
+            p.Stoc,
+            p.Pret,
+            p.Descriere,
+            s.SubcategorieNume,
+            c.CategorieNume
+        FROM dbo.Produs p
+        LEFT JOIN dbo.Subcategorie s ON s.SubcategorieId = p.SubcategorieId
+        LEFT JOIN dbo.Categorie c ON c.CategorieId = s.CategorieId
+        """
+    )
     rows = cursor.fetchall()
 
     products = []
@@ -512,6 +856,8 @@ def view_products():
         products.append({
             "id": row.ProdusId,
             "sub_id": row.SubcategorieId,
+            "subcategory": row.SubcategorieNume.strip() if row.SubcategorieNume else None,
+            "category": row.CategorieNume.strip() if row.CategorieNume else None,
             "image": image_base64,
             "stoc": row.Stoc,
             "pret": row.Pret,

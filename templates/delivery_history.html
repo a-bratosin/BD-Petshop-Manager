@@ -1,0 +1,38 @@
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<h1>Delivery History</h1>
+
+<table border="1" cellpadding="10">
+  <thead>
+    <tr>
+      <th>Delivery ID</th>
+      <th>Distributor</th>
+      <th>Date</th>
+      <th>Total Price</th>
+      <th>Total Delivery Cost</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for delivery in deliveries %}
+    <tr>
+      <td>{{ delivery.id }}</td>
+      <td>{{ delivery.distributor }}</td>
+      <td>{{ delivery.date }}</td>
+      <td>{{ "{:,.2f} lei".format(delivery.total_price) }}</td>
+      <td>{{ "{:,.2f} lei".format(delivery.total_cost) }}</td>
+      <td>
+        <a href="/delivery-details/{{ delivery.id }}">Details</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
