@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from pyodbc import connect, Binary
 import hashlib
 import base64
+import re
 
 # FORMAT: UID is the user, PWD is the password
 load_dotenv()
@@ -196,7 +197,92 @@ def create_category():
 
     return render_template('create_category.html')
 
+@app.route('/create-customer', methods=['GET', 'POST'])
+def create_customer():
 
+    if not session.get('loggedin') or session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        nume = request.form.get('Nume')
+        prenume = request.form.get('Prenume')
+        email = request.form.get('Email')
+        telefon = request.form.get('Telefon')
+        strada = request.form.get('Strada')
+        numar = request.form.get('Numar')
+        oras = request.form.get('Oras')
+        judet = request.form.get('Judet')
+        password = request.form.get('Password')
+        password_confirm = request.form.get('PasswordConfirm')
+        
+        if not (nume and prenume and email and telefon and strada and numar and oras and judet and password and password_confirm):
+            flash("All fields are required.")
+            return redirect(request.url)
+        if password != password_confirm:
+            flash("Passwords do not match.")
+            return redirect(request.url)
+    
+        # Validate phone number: 10 digits, all numbers
+        if not re.fullmatch(r'\d{10}', telefon):
+            flash("Phone number must be exactly 10 digits.")
+            return redirect(request.url)
+        # Validate email: standard format x@y.z
+        if not re.fullmatch(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            flash("Invalid email address format.")
+            return redirect(request.url)
+    
+        cursor = conn.cursor()
+        # Check if customer already exists (by email or phone)
+        cursor.execute("SELECT COUNT(*) FROM dbo.Client WHERE ClientEmail = ? OR ClientTelefon = ?", (email, telefon))
+        exists = cursor.fetchone()[0]
+        if exists:
+            flash("A customer with this email or phone already exists.")
+            return redirect(request.url)
+        
+        # Check if user already exists (by username/address)
+        cursor.execute("SELECT COUNT(*) FROM dbo.Utilizatori WHERE Username = ?", (email))
+        user_exists = cursor.fetchone()[0]
+        if user_exists:
+            flash("A user with this address already exists.")
+            return redirect(request.url)
+        try:
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            # Create user in Utilizatori
+            cursor.execute("""
+                INSERT INTO dbo.Utilizatori (Username, Password, UserCategory)
+                OUTPUT INSERTED.UserId
+                VALUES (?, ?, ?)
+            """, (email, password_hash, 'customer'))
+            user_id = cursor.fetchone()[0]
+            print(user_id)
+            # Insert customer with UserId
+            query = """
+                INSERT INTO dbo.Client (UserId, ClientNume, ClientPrenume, ClientEmail, ClientTelefon, ClientStrada, ClientNumar, ClientOras, ClientJudet)
+                OUTPUT INSERTED.ClientId
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+            cursor.execute(query, (user_id, nume, prenume, email, telefon, strada, numar, oras, judet))
+            client_id = cursor.fetchone()[0]
+
+            # Check if Card de fidelitate is requested
+            if request.form.get('CardFidelitate'):
+                from datetime import datetime
+                now = datetime.now()
+                cursor.execute("""
+                    INSERT INTO dbo.CardFidelitate (ClientId, DataInregistrarii)
+                    VALUES (?, ?)
+                """, (client_id, now))
+
+            conn.commit()
+            flash("Customer added successfully!")
+            return redirect(url_for('create_customer'))
+        except Exception as e:
+            conn.rollback()
+            flash(f"An error occurred: {str(e)}")
+            return redirect(request.url)
+
+    return render_template('create_customer.html')
 
 
 @app.route('/view-products')
