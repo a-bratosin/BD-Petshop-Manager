@@ -42,7 +42,7 @@ def login():
             if session['role'] == 'employee':
                 return redirect(url_for('employee_dashboard'))
             else:
-                return render_template('index.html', msg='Logged in successfully!')
+                return redirect(url_for('customer_dashboard'))
         else:
             msg = 'Incorrect username/password!'
     return render_template('login.html', msg=msg)
@@ -53,6 +53,190 @@ def employee_dashboard():
         flash("Unauthorized: This action requires employee privileges.")
         return redirect(url_for('login'))
     return render_template('employee_dashboard.html')
+
+@app.route('/customer-dashboard')
+def customer_dashboard():
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+    return render_template('customer_dashboard.html')
+
+@app.route('/customer-orders')
+def customer_orders():
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            c.ComandaId,
+            c.ComandaData,
+            c.ReducereLoialitate,
+            SUM(pc.ProdusComandaCantitate * p.Pret) AS TotalPret
+        FROM dbo.Comanda c
+        JOIN dbo.Client cl ON cl.ClientId = c.ClientId
+        LEFT JOIN dbo.ProdusComanda pc ON pc.ComandaId = c.ComandaId
+        LEFT JOIN dbo.Produs p ON p.ProdusId = pc.ProdusId
+        WHERE cl.UserId = ?
+        GROUP BY c.ComandaId, c.ComandaData, c.ReducereLoialitate
+        ORDER BY c.ComandaId DESC
+        """,
+        (session.get('id'),)
+    )
+    rows = cursor.fetchall()
+    orders = [
+        {
+            "id": row.ComandaId,
+            "date": row.ComandaData,
+            "discount_pct": int(row.ReducereLoialitate) if row.ReducereLoialitate is not None else 0,
+            "total_price": float(row.TotalPret) if row.TotalPret is not None else 0.0,
+        }
+        for row in rows
+    ]
+
+    return render_template('customer_order_history.html', orders=orders)
+
+@app.route('/customer-order/<int:order_id>')
+def customer_order_details(order_id):
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            c.ComandaId,
+            c.ComandaData,
+            c.ReducereLoialitate
+        FROM dbo.Comanda c
+        JOIN dbo.Client cl ON cl.ClientId = c.ClientId
+        WHERE cl.UserId = ? AND c.ComandaId = ?
+        """,
+        (session.get('id'), order_id)
+    )
+    order_row = cursor.fetchone()
+    if not order_row:
+        flash("Order not found.")
+        return redirect(url_for('customer_orders'))
+
+    cursor.execute(
+        """
+        SELECT
+            p.Descriere,
+            pc.ProdusComandaCantitate,
+            p.Pret
+        FROM dbo.ProdusComanda pc
+        JOIN dbo.Produs p ON p.ProdusId = pc.ProdusId
+        WHERE pc.ComandaId = ?
+        ORDER BY p.Descriere
+        """,
+        (order_id,)
+    )
+    item_rows = cursor.fetchall()
+    items = [
+        {
+            "product": row.Descriere,
+            "qty": row.ProdusComandaCantitate,
+            "price": float(row.Pret),
+            "line_total": float(row.Pret) * row.ProdusComandaCantitate,
+        }
+        for row in item_rows
+    ]
+
+    order = {
+        "id": order_row.ComandaId,
+        "date": order_row.ComandaData,
+        "discount_pct": int(order_row.ReducereLoialitate) if order_row.ReducereLoialitate is not None else 0,
+    }
+
+    return render_template('customer_order_details.html', order=order, items=items)
+
+@app.route('/customer-details')
+def customer_details():
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            c.ClientId,
+            c.ClientNume,
+            c.ClientPrenume,
+            c.ClientTelefon,
+            c.ClientStrada,
+            c.ClientNumar,
+            c.ClientOras,
+            c.ClientJudet,
+            u.Username
+        FROM dbo.Client c
+        JOIN dbo.Utilizatori u ON u.UserId = c.UserId
+        WHERE u.UserId = ?
+        """,
+        (session.get('id'),)
+    )
+    client_row = cursor.fetchone()
+    if not client_row:
+        flash("Customer record not found.")
+        return redirect(url_for('customer_dashboard'))
+
+    cursor.execute(
+        """
+        SELECT DataInregistrarii
+        FROM dbo.CardFidelitate
+        WHERE ClientId = ?
+        """,
+        (client_row.ClientId,)
+    )
+    card_row = cursor.fetchone()
+    card_start = card_row[0] if card_row else None
+
+    cursor.execute(
+        """
+        SELECT MIN(ComandaData)
+        FROM dbo.Comanda
+        WHERE ClientId = ?
+        """,
+        (client_row.ClientId,)
+    )
+    first_order_row = cursor.fetchone()
+    first_order_date = first_order_row[0] if first_order_row else None
+
+    from datetime import datetime
+    now = datetime.now()
+
+    dates = [d for d in [card_start, first_order_date] if d]
+    customer_since = min(dates) if dates else None
+    customer_years = None
+    if customer_since:
+        customer_years = round((now - customer_since).days / 365.25, 2)
+
+    loyalty_years = None
+    loyalty_discount = 0
+    if card_start:
+        loyalty_years = round((now - card_start).days / 365.25, 2)
+        if loyalty_years > 5:
+            loyalty_discount = 7
+        elif loyalty_years > 2:
+            loyalty_discount = 3
+
+    customer = {
+        "name": f"{client_row.ClientNume} {client_row.ClientPrenume}",
+        "phone": client_row.ClientTelefon,
+        "email": client_row.Username,
+        "address": f"{client_row.ClientStrada} {client_row.ClientNumar}, {client_row.ClientOras}, {client_row.ClientJudet}",
+        "customer_since": customer_since,
+        "customer_years": customer_years,
+        "card_start": card_start,
+        "loyalty_years": loyalty_years,
+        "loyalty_discount": loyalty_discount,
+    }
+
+    return render_template('customer_details.html', customer=customer)
 
 
 @app.route('/logout')
@@ -675,6 +859,30 @@ def delivery_details(delivery_id):
     return render_template('delivery_details.html', delivery=delivery, items=items)
 
 
+@app.route('/delete-delivery/<int:delivery_id>', methods=['POST'])
+def delete_delivery(delivery_id):
+    if not session.get('loggedin') or session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM dbo.Livrare WHERE LivrareId = ?", (delivery_id,))
+    if not cursor.fetchone():
+        flash("Delivery not found.")
+        return redirect(url_for('delivery_history'))
+
+    try:
+        cursor.execute("DELETE FROM dbo.ProdusLivrare WHERE LivrareId = ?", (delivery_id,))
+        cursor.execute("DELETE FROM dbo.Livrare WHERE LivrareId = ?", (delivery_id,))
+        conn.commit()
+        flash("Delivery deleted successfully.")
+    except Exception as e:
+        conn.rollback()
+        flash(f"An error occurred: {str(e)}")
+
+    return redirect(url_for('delivery_history'))
+
+
 @app.route('/order-history')
 def order_history():
     if not session.get('loggedin') or session.get('role') != 'employee':
@@ -774,6 +982,30 @@ def order_details(order_id):
     }
 
     return render_template('order_details.html', order=order, items=items)
+
+
+@app.route('/delete-order/<int:order_id>', methods=['POST'])
+def delete_order(order_id):
+    if not session.get('loggedin') or session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM dbo.Comanda WHERE ComandaId = ?", (order_id,))
+    if not cursor.fetchone():
+        flash("Order not found.")
+        return redirect(url_for('order_history'))
+
+    try:
+        cursor.execute("DELETE FROM dbo.ProdusComanda WHERE ComandaId = ?", (order_id,))
+        cursor.execute("DELETE FROM dbo.Comanda WHERE ComandaId = ?", (order_id,))
+        conn.commit()
+        flash("Order deleted successfully.")
+    except Exception as e:
+        conn.rollback()
+        flash(f"An error occurred: {str(e)}")
+
+    return redirect(url_for('order_history'))
 
 
 @app.route('/loyalty-discount')

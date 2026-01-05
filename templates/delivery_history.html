@@ -31,6 +31,9 @@
       <td>{{ "{:,.2f} lei".format(delivery.total_cost) }}</td>
       <td>
         <a href="/delivery-details/{{ delivery.id }}">Details</a>
+        <form action="/delete-delivery/{{ delivery.id }}" method="POST" style="display:inline;" onsubmit="return confirm('Delete this delivery?');">
+          <button type="submit">Delete</button>
+        </form>
       </td>
     </tr>
     {% endfor %}

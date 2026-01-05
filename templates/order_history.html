@@ -29,6 +29,9 @@
       <td>{{ "{:,.2f} lei".format(order.total_price) }}</td>
       <td>
         <a href="/order-details/{{ order.id }}">Details</a>
+        <form action="/delete-order/{{ order.id }}" method="POST" style="display:inline;" onsubmit="return confirm('Delete this order?');">
+          <button type="submit">Delete</button>
+        </form>
       </td>
     </tr>
     {% endfor %}
