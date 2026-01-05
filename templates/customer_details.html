@@ -1,0 +1,37 @@
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<h1>Personal Details</h1>
+
+<p><strong>Name:</strong> {{ customer.name }}</p>
+<p><strong>Email:</strong> {{ customer.email }}</p>
+<p><strong>Phone:</strong> {{ customer.phone }}</p>
+<p><strong>Address:</strong> {{ customer.address }}</p>
+
+<h2>Loyalty Card</h2>
+{% if customer.card_start %}
+  <p><strong>Status:</strong> Active</p>
+  <p><strong>Card Since:</strong> {{ customer.card_start }}</p>
+  <p><strong>Years Active:</strong> {{ customer.loyalty_years }}</p>
+  <p><strong>Current Discount:</strong> {{ customer.loyalty_discount }}%</p>
+{% else %}
+  <p><strong>Status:</strong> Not enrolled</p>
+{% endif %}
+
+<h2>Customer Since</h2>
+{% if customer.customer_since %}
+  <p><strong>Since:</strong> {{ customer.customer_since }}</p>
+  <p><strong>Years as Customer:</strong> {{ customer.customer_years }}</p>
+{% else %}
+  <p><strong>Since:</strong> Not available</p>
+{% endif %}
+
+<br>
+<a href="/customer-dashboard">Back to Dashboard</a>

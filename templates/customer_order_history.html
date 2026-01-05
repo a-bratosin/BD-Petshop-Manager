@@ -1,0 +1,39 @@
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<h1>Your Order History</h1>
+
+<table border="1" cellpadding="10">
+  <thead>
+    <tr>
+      <th>Order ID</th>
+      <th>Date</th>
+      <th>Discount</th>
+      <th>Total Price</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for order in orders %}
+    <tr>
+      <td>{{ order.id }}</td>
+      <td>{{ order.date }}</td>
+      <td>{{ order.discount_pct }}%</td>
+      <td>{{ "{:,.2f} lei".format(order.total_price) }}</td>
+      <td>
+        <a href="/customer-order/{{ order.id }}">Details</a>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<br>
+<a href="/customer-dashboard">Back to Dashboard</a>
