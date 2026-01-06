@@ -6,7 +6,8 @@ from pyodbc import connect, Binary
 import hashlib
 import base64
 import re
-
+import uuid
+from datetime import datetime
 # FORMAT: UID is the user, PWD is the password
 load_dotenv()
 conn = connect(getenv("SQL_CONNECTION_STRING"))
@@ -16,6 +17,13 @@ print("Connected!")
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = getenv("SESSION_KEY")
+app.config['SERVER_INSTANCE_ID'] = uuid.uuid4().hex
+
+@app.before_request
+def enforce_server_session():
+    server_id = app.config.get('SERVER_INSTANCE_ID')
+    if session and session.get('server_instance') != server_id:
+        session.clear()
 
 @app.route("/")
 def hello_world():
@@ -37,6 +45,7 @@ def login():
             session['id'] = account[0]
             session['username'] = account[1].strip()
             session['role'] = account[2].strip()
+            session['server_instance'] = app.config.get('SERVER_INSTANCE_ID')
             print(session)
             # Redirect employee to dashboard
             if session['role'] == 'employee':
@@ -88,6 +97,53 @@ def customer_shop():
     rows = cursor.fetchall()
 
     products = []
+    product_names = []
+    for row in rows:
+        image_base64 = None
+        if row.Imagine:
+            image_base64 = base64.b64encode(row.Imagine).decode('utf-8')
+        if row.Descriere:
+            product_names.append(row.Descriere)
+        products.append({
+            "id": row.ProdusId,
+            "image": image_base64,
+            "stoc": int(row.Stoc) if row.Stoc is not None else 0,
+            "pret": float(row.Pret) if row.Pret is not None else 0.0,
+            "descriere": row.Descriere
+        })
+
+    cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
+
+    return render_template('customer_shop.html', products=products, cart_count=cart_count, product_names=product_names)
+
+@app.route('/customer-shop/search')
+def customer_shop_search():
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    query = request.args.get('query', '').strip()
+    if not query:
+        return redirect(url_for('customer_shop'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            p.ProdusId,
+            p.Imagine,
+            p.Stoc,
+            p.Pret,
+            p.Descriere
+        FROM dbo.Produs p
+        WHERE p.Descriere LIKE ?
+        ORDER BY p.Descriere
+        """,
+        (f"%{query}%",)
+    )
+    rows = cursor.fetchall()
+
+    products = []
     for row in rows:
         image_base64 = None
         if row.Imagine:
@@ -100,9 +156,61 @@ def customer_shop():
             "descriere": row.Descriere
         })
 
+    cursor.execute(
+        """
+        SELECT Descriere
+        FROM dbo.Produs
+        WHERE Descriere IS NOT NULL
+        ORDER BY Descriere
+        """
+    )
+    product_names = [row.Descriere for row in cursor.fetchall()]
+
     cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
 
-    return render_template('customer_shop.html', products=products, cart_count=cart_count)
+    return render_template(
+        'customer_search.html',
+        products=products,
+        cart_count=cart_count,
+        product_names=product_names,
+        query=query
+    )
+
+@app.route('/product/<int:product_id>')
+def customer_product_details(product_id):
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT ProdusId, Imagine, Stoc, Pret, Descriere
+        FROM dbo.Produs
+        WHERE ProdusId = ?
+        """,
+        (product_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        flash("Product not found.")
+        return redirect(url_for('customer_shop'))
+
+    image_base64 = None
+    if row.Imagine:
+        image_base64 = base64.b64encode(row.Imagine).decode('utf-8')
+
+    product = {
+        "id": row.ProdusId,
+        "image": image_base64,
+        "stoc": int(row.Stoc) if row.Stoc is not None else 0,
+        "pret": float(row.Pret) if row.Pret is not None else 0.0,
+        "descriere": row.Descriere
+    }
+
+    cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
+
+    return render_template('customer_product.html', product=product, cart_count=cart_count)
 
 @app.route('/customer-cart')
 def customer_cart():
@@ -159,7 +267,17 @@ def customer_cart_add():
     product_id_raw = request.form.get('product_id', '').strip()
     if not product_id_raw.isdigit():
         flash("Invalid product selection.")
-        return redirect(url_for('customer_shop'))
+        return redirect(request.referrer or url_for('customer_shop'))
+
+    quantity_raw = request.form.get('quantity', '1').strip()
+    if not quantity_raw.isdigit():
+        flash("Invalid quantity.")
+        return redirect(request.referrer or url_for('customer_shop'))
+
+    quantity = int(quantity_raw)
+    if quantity <= 0:
+        flash("Quantity must be at least 1.")
+        return redirect(request.referrer or url_for('customer_shop'))
 
     product_id = int(product_id_raw)
     cursor = conn.cursor()
@@ -170,25 +288,36 @@ def customer_cart_add():
     row = cursor.fetchone()
     if not row:
         flash("Product not found.")
-        return redirect(url_for('customer_shop'))
+        return redirect(request.referrer or url_for('customer_shop'))
 
     available_stock = int(row.Stoc) if row.Stoc is not None else 0
     if available_stock <= 0:
         flash("This product is currently out of stock.")
-        return redirect(url_for('customer_shop'))
+        return redirect(request.referrer or url_for('customer_shop'))
 
     cart = session.get('cart', {})
     current_qty = int(cart.get(str(product_id), 0))
-    if current_qty + 1 > available_stock:
+    if current_qty + quantity > available_stock:
         flash("Not enough stock available for that quantity.")
-        return redirect(url_for('customer_shop'))
+        return redirect(request.referrer or url_for('customer_shop'))
 
-    cart[str(product_id)] = current_qty + 1
+    cart[str(product_id)] = current_qty + quantity
     session['cart'] = cart
     session.modified = True
 
     flash(f"Added '{row.Descriere}' to your cart.")
-    return redirect(url_for('customer_shop'))
+    return redirect(request.referrer or url_for('customer_shop'))
+
+@app.route('/customer-cart/clear', methods=['POST'])
+def customer_cart_clear():
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    session['cart'] = {}
+    session.modified = True
+    flash("Cart cleared.")
+    return redirect(url_for('customer_cart'))
 
 @app.route('/customer-cart/remove', methods=['POST'])
 def customer_cart_remove():

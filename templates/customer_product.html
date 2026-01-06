@@ -1,0 +1,90 @@
+<style>
+  .product-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .product-nav {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .product-card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 16px;
+    max-width: 640px;
+  }
+  .product-card img {
+    width: 100%;
+    height: 280px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: #f4f4f4;
+    margin-bottom: 12px;
+  }
+  .product-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.95rem;
+    color: #444;
+    margin-bottom: 12px;
+  }
+  .product-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .product-actions input {
+    width: 80px;
+    padding: 6px 8px;
+  }
+  .product-actions button {
+    padding: 8px 12px;
+  }
+  .flashes {
+    padding-left: 16px;
+    margin-bottom: 12px;
+  }
+</style>
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<div class="product-header">
+  <h1>Product Details</h1>
+  <div class="product-nav">
+    <a href="/customer-shop">Shop</a>
+    <a href="/customer-cart">Cart ({{ cart_count }})</a>
+    <a href="/logout">Logout</a>
+  </div>
+</div>
+
+<div class="product-card">
+  {% if product.image %}
+    <img src="data:image/jpeg;base64,{{ product.image }}" alt="{{ product.descriere }}">
+  {% else %}
+    <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="No image available">
+  {% endif %}
+  <h2>{{ product.descriere }}</h2>
+  <div class="product-meta">
+    <span>Price: ${{ "{:,.2f}".format(product.pret) }}</span>
+    <span>Stock: {{ product.stoc }}</span>
+  </div>
+  <form class="product-actions" method="post" action="/customer-cart/add">
+    <input type="hidden" name="product_id" value="{{ product.id }}">
+    <input type="number" name="quantity" min="1" max="{{ product.stoc }}" value="1" {% if product.stoc <= 0 %}disabled{% endif %}>
+    <button type="submit" {% if product.stoc <= 0 %}disabled{% endif %}>Add to cart</button>
+  </form>
+</div>

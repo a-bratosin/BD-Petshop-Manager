@@ -130,6 +130,9 @@
     <form method="post" action="/customer-cart/confirm" onsubmit="return confirm('Place this order now?');">
       <button type="submit">Confirm order</button>
     </form>
+    <form method="post" action="/customer-cart/clear" onsubmit="return confirm('Clear your cart?');">
+      <button type="submit">Clear cart</button>
+    </form>
   </div>
 {% else %}
   <p>Your cart is empty.</p>

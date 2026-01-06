@@ -83,9 +83,9 @@
 {% endwith %}
 
 <div class="shop-header">
-  <h1>Petshop Store</h1>
+  <h1>Search Results</h1>
   <form class="shop-search" method="get" action="/customer-shop/search">
-    <input type="text" name="query" list="product-names" placeholder="Search products" autocomplete="off" required>
+    <input type="text" name="query" list="product-names" placeholder="Search products" value="{{ query }}" autocomplete="off" required>
     <button type="submit">Search</button>
     <datalist id="product-names">
       {% for name in product_names %}
@@ -94,31 +94,35 @@
     </datalist>
   </form>
   <div class="shop-nav">
-    <a href="/customer-dashboard">Dashboard</a>
+    <a href="/customer-shop">Shop</a>
     <a href="/customer-cart">Cart ({{ cart_count }})</a>
     <a href="/logout">Logout</a>
   </div>
 </div>
 
-<div class="shop-grid">
-  {% for product in products %}
-    <div class="shop-card">
-      <a class="shop-link" href="/product/{{ product.id }}">
-        {% if product.image %}
-          <img src="data:image/jpeg;base64,{{ product.image }}" alt="{{ product.descriere }}">
-        {% else %}
-          <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="No image available">
-        {% endif %}
-        <h3>{{ product.descriere }}</h3>
-      </a>
-      <div class="shop-meta">
-        <span>${{ "{:,.2f}".format(product.pret) }}</span>
-        <span>Stock: {{ product.stoc }}</span>
+{% if products %}
+  <div class="shop-grid">
+    {% for product in products %}
+      <div class="shop-card">
+        <a class="shop-link" href="/product/{{ product.id }}">
+          {% if product.image %}
+            <img src="data:image/jpeg;base64,{{ product.image }}" alt="{{ product.descriere }}">
+          {% else %}
+            <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="No image available">
+          {% endif %}
+          <h3>{{ product.descriere }}</h3>
+        </a>
+        <div class="shop-meta">
+          <span>${{ "{:,.2f}".format(product.pret) }}</span>
+          <span>Stock: {{ product.stoc }}</span>
+        </div>
+        <form method="post" action="/customer-cart/add">
+          <input type="hidden" name="product_id" value="{{ product.id }}">
+          <button type="submit" {% if product.stoc <= 0 %}disabled{% endif %}>Add to cart</button>
+        </form>
       </div>
-      <form method="post" action="/customer-cart/add">
-        <input type="hidden" name="product_id" value="{{ product.id }}">
-        <button type="submit" {% if product.stoc <= 0 %}disabled{% endif %}>Add to cart</button>
-      </form>
-    </div>
-  {% endfor %}
-</div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p>No products match "{{ query }}".</p>
+{% endif %}
