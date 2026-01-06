@@ -56,10 +56,10 @@
   {% endif %}
 {% endwith %}
 
-{% set header_title = "Search Results" %}
+{% set header_title = heading %}
 {% set show_search = true %}
 {% set search_action = "/customer-shop/search" %}
-{% set search_query = query %}
+{% set search_query = "" %}
 {% include "_customer_shop_header.html" %}
 
 {% if products %}
@@ -86,5 +86,5 @@
     {% endfor %}
   </div>
 {% else %}
-  <p>No products match "{{ query }}".</p>
+  <p>No products available.</p>
 {% endif %}

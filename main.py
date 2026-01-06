@@ -25,6 +25,51 @@ def enforce_server_session():
     if session and session.get('server_instance') != server_id:
         session.clear()
 
+def fetch_categories(cursor):
+    cursor.execute(
+        """
+        SELECT CategorieId, CategorieNume
+        FROM dbo.Categorie
+        ORDER BY CategorieNume
+        """
+    )
+    categories = [
+        {"id": row.CategorieId, "name": row.CategorieNume, "subcategories": []}
+        for row in cursor.fetchall()
+        if row.CategorieNume
+    ]
+    categories_by_id = {cat["id"]: cat for cat in categories}
+
+    cursor.execute(
+        """
+        SELECT SubcategorieId, SubcategorieNume, CategorieId
+        FROM dbo.Subcategorie
+        ORDER BY SubcategorieNume
+        """
+    )
+    for row in cursor.fetchall():
+        if not row.SubcategorieNume:
+            continue
+        cat = categories_by_id.get(row.CategorieId)
+        if cat is not None:
+            cat["subcategories"].append({
+                "id": row.SubcategorieId,
+                "name": row.SubcategorieNume
+            })
+
+    return categories
+
+def fetch_product_names(cursor):
+    cursor.execute(
+        """
+        SELECT Descriere
+        FROM dbo.Produs
+        WHERE Descriere IS NOT NULL
+        ORDER BY Descriere
+        """
+    )
+    return [row.Descriere for row in cursor.fetchall()]
+
 @app.route("/")
 def hello_world():
     return "<p>Hello, World!</p>"
@@ -97,13 +142,10 @@ def customer_shop():
     rows = cursor.fetchall()
 
     products = []
-    product_names = []
     for row in rows:
         image_base64 = None
         if row.Imagine:
             image_base64 = base64.b64encode(row.Imagine).decode('utf-8')
-        if row.Descriere:
-            product_names.append(row.Descriere)
         products.append({
             "id": row.ProdusId,
             "image": image_base64,
@@ -112,9 +154,17 @@ def customer_shop():
             "descriere": row.Descriere
         })
 
+    product_names = fetch_product_names(cursor)
+    categories = fetch_categories(cursor)
     cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
 
-    return render_template('customer_shop.html', products=products, cart_count=cart_count, product_names=product_names)
+    return render_template(
+        'customer_shop.html',
+        products=products,
+        cart_count=cart_count,
+        product_names=product_names,
+        categories=categories
+    )
 
 @app.route('/customer-shop/search')
 def customer_shop_search():
@@ -156,15 +206,8 @@ def customer_shop_search():
             "descriere": row.Descriere
         })
 
-    cursor.execute(
-        """
-        SELECT Descriere
-        FROM dbo.Produs
-        WHERE Descriere IS NOT NULL
-        ORDER BY Descriere
-        """
-    )
-    product_names = [row.Descriere for row in cursor.fetchall()]
+    product_names = fetch_product_names(cursor)
+    categories = fetch_categories(cursor)
 
     cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
 
@@ -173,7 +216,129 @@ def customer_shop_search():
         products=products,
         cart_count=cart_count,
         product_names=product_names,
+        categories=categories,
         query=query
+    )
+
+@app.route('/customer-shop/category/<int:category_id>')
+def customer_category_view(category_id):
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT CategorieNume FROM dbo.Categorie WHERE CategorieId = ?",
+        (category_id,)
+    )
+    category_row = cursor.fetchone()
+    if not category_row:
+        flash("Category not found.")
+        return redirect(url_for('customer_shop'))
+
+    cursor.execute(
+        """
+        SELECT
+            p.ProdusId,
+            p.Imagine,
+            p.Stoc,
+            p.Pret,
+            p.Descriere
+        FROM dbo.Produs p
+        JOIN dbo.Subcategorie s ON s.SubcategorieId = p.SubcategorieId
+        WHERE s.CategorieId = ?
+        ORDER BY p.Descriere
+        """,
+        (category_id,)
+    )
+    rows = cursor.fetchall()
+
+    products = []
+    for row in rows:
+        image_base64 = None
+        if row.Imagine:
+            image_base64 = base64.b64encode(row.Imagine).decode('utf-8')
+        products.append({
+            "id": row.ProdusId,
+            "image": image_base64,
+            "stoc": int(row.Stoc) if row.Stoc is not None else 0,
+            "pret": float(row.Pret) if row.Pret is not None else 0.0,
+            "descriere": row.Descriere
+        })
+
+    product_names = fetch_product_names(cursor)
+    categories = fetch_categories(cursor)
+    cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
+
+    return render_template(
+        'customer_category.html',
+        products=products,
+        cart_count=cart_count,
+        product_names=product_names,
+        categories=categories,
+        heading=f"Category: {category_row.CategorieNume}"
+    )
+
+@app.route('/customer-shop/subcategory/<int:subcategory_id>')
+def customer_subcategory_view(subcategory_id):
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT SubcategorieNume
+        FROM dbo.Subcategorie
+        WHERE SubcategorieId = ?
+        """,
+        (subcategory_id,)
+    )
+    sub_row = cursor.fetchone()
+    if not sub_row:
+        flash("Subcategory not found.")
+        return redirect(url_for('customer_shop'))
+
+    cursor.execute(
+        """
+        SELECT
+            p.ProdusId,
+            p.Imagine,
+            p.Stoc,
+            p.Pret,
+            p.Descriere
+        FROM dbo.Produs p
+        WHERE p.SubcategorieId = ?
+        ORDER BY p.Descriere
+        """,
+        (subcategory_id,)
+    )
+    rows = cursor.fetchall()
+
+    products = []
+    for row in rows:
+        image_base64 = None
+        if row.Imagine:
+            image_base64 = base64.b64encode(row.Imagine).decode('utf-8')
+        products.append({
+            "id": row.ProdusId,
+            "image": image_base64,
+            "stoc": int(row.Stoc) if row.Stoc is not None else 0,
+            "pret": float(row.Pret) if row.Pret is not None else 0.0,
+            "descriere": row.Descriere
+        })
+
+    product_names = fetch_product_names(cursor)
+    categories = fetch_categories(cursor)
+    cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
+
+    return render_template(
+        'customer_category.html',
+        products=products,
+        cart_count=cart_count,
+        product_names=product_names,
+        categories=categories,
+        heading=f"Subcategory: {sub_row.SubcategorieNume}"
     )
 
 @app.route('/product/<int:product_id>')
@@ -208,9 +373,15 @@ def customer_product_details(product_id):
         "descriere": row.Descriere
     }
 
+    categories = fetch_categories(cursor)
     cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
 
-    return render_template('customer_product.html', product=product, cart_count=cart_count)
+    return render_template(
+        'customer_product.html',
+        product=product,
+        cart_count=cart_count,
+        categories=categories
+    )
 
 @app.route('/customer-cart')
 def customer_cart():

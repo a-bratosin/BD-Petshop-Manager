@@ -1,17 +1,4 @@
 <style>
-  .product-header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 18px;
-  }
-  .product-nav {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
   .product-card {
     border: 1px solid #ddd;
     border-radius: 8px;
@@ -62,14 +49,11 @@
   {% endif %}
 {% endwith %}
 
-<div class="product-header">
-  <h1>Product Details</h1>
-  <div class="product-nav">
-    <a href="/customer-shop">Shop</a>
-    <a href="/customer-cart">Cart ({{ cart_count }})</a>
-    <a href="/logout">Logout</a>
-  </div>
-</div>
+{% set header_title = "Product Details" %}
+{% set show_search = false %}
+{% set search_action = "/customer-shop/search" %}
+{% set search_query = "" %}
+{% include "_customer_shop_header.html" %}
 
 <div class="product-card">
   {% if product.image %}

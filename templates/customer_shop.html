@@ -1,30 +1,4 @@
 <style>
-  .shop-header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 18px;
-  }
-  .shop-nav {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .shop-search {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-  .shop-search input {
-    padding: 6px 8px;
-    min-width: 220px;
-  }
-  .shop-search button {
-    padding: 6px 10px;
-  }
   .shop-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -82,23 +56,11 @@
   {% endif %}
 {% endwith %}
 
-<div class="shop-header">
-  <h1>Petshop Store</h1>
-  <form class="shop-search" method="get" action="/customer-shop/search">
-    <input type="text" name="query" list="product-names" placeholder="Search products" autocomplete="off" required>
-    <button type="submit">Search</button>
-    <datalist id="product-names">
-      {% for name in product_names %}
-        <option value="{{ name }}"></option>
-      {% endfor %}
-    </datalist>
-  </form>
-  <div class="shop-nav">
-    <a href="/customer-dashboard">Dashboard</a>
-    <a href="/customer-cart">Cart ({{ cart_count }})</a>
-    <a href="/logout">Logout</a>
-  </div>
-</div>
+{% set header_title = "Petshop Store" %}
+{% set show_search = true %}
+{% set search_action = "/customer-shop/search" %}
+{% set search_query = "" %}
+{% include "_customer_shop_header.html" %}
 
 <div class="shop-grid">
   {% for product in products %}

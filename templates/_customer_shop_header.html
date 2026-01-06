@@ -1,0 +1,111 @@
+<style>
+  .shop-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .shop-nav {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .shop-search {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .shop-search input {
+    padding: 6px 8px;
+    min-width: 220px;
+  }
+  .shop-search button {
+    padding: 6px 10px;
+  }
+  .category-bar {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 8px 0;
+    border-top: 1px solid #e5e5e5;
+    border-bottom: 1px solid #e5e5e5;
+    margin-bottom: 16px;
+  }
+  .category-item {
+    position: relative;
+  }
+  .category-item > a {
+    display: inline-block;
+    padding: 6px 10px;
+    background: #f5f5f5;
+    border-radius: 6px;
+    text-decoration: none;
+    color: #222;
+  }
+  .category-item > a:hover {
+    background: #e9e9e9;
+  }
+  .subcategory-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 200px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 8px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+    z-index: 10;
+  }
+  .subcategory-menu a {
+    display: block;
+    padding: 6px 8px;
+    text-decoration: none;
+    color: #222;
+  }
+  .subcategory-menu a:hover {
+    background: #f5f5f5;
+  }
+  .category-item:hover .subcategory-menu {
+    display: block;
+  }
+</style>
+
+<div class="shop-header">
+  <h1>{{ header_title }}</h1>
+  {% if show_search %}
+    <form class="shop-search" method="get" action="{{ search_action }}">
+      <input type="text" name="query" list="product-names" placeholder="Search products" value="{{ search_query or '' }}" autocomplete="off" required>
+      <button type="submit">Search</button>
+      <datalist id="product-names">
+        {% for name in product_names %}
+          <option value="{{ name }}"></option>
+        {% endfor %}
+      </datalist>
+    </form>
+  {% endif %}
+  <div class="shop-nav">
+    <a href="/customer-shop">Shop</a>
+    <a href="/customer-cart">Cart ({{ cart_count }})</a>
+    <a href="/logout">Logout</a>
+  </div>
+</div>
+
+<div class="category-bar">
+  {% for category in categories %}
+    <div class="category-item">
+      <a href="/customer-shop/category/{{ category.id }}">{{ category.name }}</a>
+      {% if category.subcategories %}
+        <div class="subcategory-menu">
+          {% for subcategory in category.subcategories %}
+            <a href="/customer-shop/subcategory/{{ subcategory.id }}">{{ subcategory.name }}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
