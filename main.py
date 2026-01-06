@@ -59,7 +59,317 @@ def customer_dashboard():
     if not session.get('loggedin') or session.get('role') != 'customer':
         flash("Unauthorized: This action requires customer privileges.")
         return redirect(url_for('login'))
-    return render_template('customer_dashboard.html')
+    cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
+
+    return render_template('customer_dashboard.html', cart_count=cart_count)
+
+@app.route('/customer-shop')
+def customer_shop():
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    if 'cart' not in session:
+        session['cart'] = {}
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT
+            p.ProdusId,
+            p.Imagine,
+            p.Stoc,
+            p.Pret,
+            p.Descriere
+        FROM dbo.Produs p
+        ORDER BY p.Descriere
+        """
+    )
+    rows = cursor.fetchall()
+
+    products = []
+    for row in rows:
+        image_base64 = None
+        if row.Imagine:
+            image_base64 = base64.b64encode(row.Imagine).decode('utf-8')
+        products.append({
+            "id": row.ProdusId,
+            "image": image_base64,
+            "stoc": int(row.Stoc) if row.Stoc is not None else 0,
+            "pret": float(row.Pret) if row.Pret is not None else 0.0,
+            "descriere": row.Descriere
+        })
+
+    cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
+
+    return render_template('customer_shop.html', products=products, cart_count=cart_count)
+
+@app.route('/customer-cart')
+def customer_cart():
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    cart = session.get('cart', {})
+    cart_ids = [int(pid) for pid in cart.keys()] if cart else []
+    items = []
+    total = 0.0
+
+    if cart_ids:
+        placeholders = ",".join("?" for _ in cart_ids)
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            SELECT ProdusId, Descriere, Pret, Imagine
+            FROM dbo.Produs
+            WHERE ProdusId IN ({placeholders})
+            """,
+            tuple(cart_ids)
+        )
+        rows = cursor.fetchall()
+        for row in rows:
+            qty = int(cart.get(str(row.ProdusId), 0))
+            if qty <= 0:
+                continue
+            price = float(row.Pret) if row.Pret is not None else 0.0
+            image_base64 = None
+            if row.Imagine:
+                image_base64 = base64.b64encode(row.Imagine).decode('utf-8')
+            line_total = price * qty
+            total += line_total
+            items.append({
+                "id": row.ProdusId,
+                "descriere": row.Descriere,
+                "price": price,
+                "qty": qty,
+                "line_total": line_total,
+                "image": image_base64
+            })
+
+    cart_count = sum(int(qty) for qty in cart.values())
+
+    return render_template('customer_cart.html', items=items, total=total, cart_count=cart_count)
+
+@app.route('/customer-cart/add', methods=['POST'])
+def customer_cart_add():
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    product_id_raw = request.form.get('product_id', '').strip()
+    if not product_id_raw.isdigit():
+        flash("Invalid product selection.")
+        return redirect(url_for('customer_shop'))
+
+    product_id = int(product_id_raw)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT ProdusId, Stoc, Descriere FROM dbo.Produs WHERE ProdusId = ?",
+        (product_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        flash("Product not found.")
+        return redirect(url_for('customer_shop'))
+
+    available_stock = int(row.Stoc) if row.Stoc is not None else 0
+    if available_stock <= 0:
+        flash("This product is currently out of stock.")
+        return redirect(url_for('customer_shop'))
+
+    cart = session.get('cart', {})
+    current_qty = int(cart.get(str(product_id), 0))
+    if current_qty + 1 > available_stock:
+        flash("Not enough stock available for that quantity.")
+        return redirect(url_for('customer_shop'))
+
+    cart[str(product_id)] = current_qty + 1
+    session['cart'] = cart
+    session.modified = True
+
+    flash(f"Added '{row.Descriere}' to your cart.")
+    return redirect(url_for('customer_shop'))
+
+@app.route('/customer-cart/remove', methods=['POST'])
+def customer_cart_remove():
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    product_id_raw = request.form.get('product_id', '').strip()
+    if not product_id_raw.isdigit():
+        flash("Invalid product selection.")
+        return redirect(url_for('customer_cart'))
+
+    product_id = int(product_id_raw)
+    cart = session.get('cart', {})
+    if str(product_id) in cart:
+        del cart[str(product_id)]
+        session['cart'] = cart
+        session.modified = True
+        flash("Item removed from your cart.")
+
+    return redirect(url_for('customer_cart'))
+
+@app.route('/customer-cart/update', methods=['POST'])
+def customer_cart_update():
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    product_id_raw = request.form.get('product_id', '').strip()
+    action = request.form.get('action', '').strip().lower()
+    if not product_id_raw.isdigit() or action not in {'inc', 'dec'}:
+        flash("Invalid cart update request.")
+        return redirect(url_for('customer_cart'))
+
+    product_id = int(product_id_raw)
+    cart = session.get('cart', {})
+    current_qty = int(cart.get(str(product_id), 0))
+
+    if action == 'dec':
+        if current_qty <= 0:
+            return redirect(url_for('customer_cart'))
+        new_qty = current_qty - 1
+        if new_qty == 0:
+            cart.pop(str(product_id), None)
+        else:
+            cart[str(product_id)] = new_qty
+        session['cart'] = cart
+        session.modified = True
+        return redirect(url_for('customer_cart'))
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT Stoc FROM dbo.Produs WHERE ProdusId = ?", (product_id,))
+    row = cursor.fetchone()
+    if not row:
+        flash("Product not found.")
+        return redirect(url_for('customer_cart'))
+
+    available_stock = int(row.Stoc) if row.Stoc is not None else 0
+    if current_qty + 1 > available_stock:
+        flash("Not enough stock available for that quantity.")
+        return redirect(url_for('customer_cart'))
+
+    cart[str(product_id)] = current_qty + 1
+    session['cart'] = cart
+    session.modified = True
+
+    return redirect(url_for('customer_cart'))
+
+@app.route('/customer-cart/confirm', methods=['POST'])
+def customer_cart_confirm():
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    cart = session.get('cart', {})
+    if not cart:
+        flash("Your cart is empty.")
+        return redirect(url_for('customer_cart'))
+
+    requested = {}
+    for pid, qty_raw in cart.items():
+        try:
+            qty = int(qty_raw)
+        except (TypeError, ValueError):
+            qty = 0
+        if qty > 0:
+            requested[int(pid)] = qty
+
+    if not requested:
+        flash("Your cart is empty.")
+        return redirect(url_for('customer_cart'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT ClientId FROM dbo.Client WHERE UserId = ?",
+        (session.get('id'),)
+    )
+    client_row = cursor.fetchone()
+    if not client_row:
+        flash("Customer record not found.")
+        return redirect(url_for('customer_cart'))
+    client_id = client_row[0]
+
+    placeholders = ",".join("?" for _ in requested)
+    cursor.execute(
+        f"""
+        SELECT ProdusId, Stoc
+        FROM dbo.Produs
+        WHERE ProdusId IN ({placeholders})
+        """,
+        tuple(requested.keys())
+    )
+    product_rows = cursor.fetchall()
+    products_by_id = {row.ProdusId: int(row.Stoc) if row.Stoc is not None else 0 for row in product_rows}
+
+    missing = [pid for pid in requested.keys() if pid not in products_by_id]
+    if missing:
+        flash("Some products no longer exist. Please reselect the items.")
+        return redirect(url_for('customer_cart'))
+
+    for pid, qty in requested.items():
+        stock = products_by_id[pid]
+        if qty > stock:
+            flash("Insufficient stock for one or more items.")
+            return redirect(url_for('customer_cart'))
+
+    try:
+        cursor.execute(
+            """
+            SELECT DataInregistrarii
+            FROM dbo.CardFidelitate
+            WHERE ClientId = ?
+            """,
+            (client_id,)
+        )
+        card_row = cursor.fetchone()
+
+        now = datetime.now()
+        discount_pct = None
+        if card_row and card_row[0]:
+            years_active = (now - card_row[0]).days / 365.25
+            if years_active > 5:
+                discount_pct = 7
+            elif years_active > 2:
+                discount_pct = 3
+
+        cursor.execute(
+            """
+            INSERT INTO dbo.Comanda (ComandaData, ClientId, AngajatId, ReducereLoialitate)
+            OUTPUT INSERTED.ComandaId
+            VALUES (?, ?, ?, ?)
+            """,
+            (now, client_id, None, discount_pct)
+        )
+        comanda_id = cursor.fetchone()[0]
+
+        for pid, qty in requested.items():
+            cursor.execute(
+                """
+                INSERT INTO dbo.ProdusComanda (ProdusId, ComandaId, ProdusComandaCantitate)
+                VALUES (?, ?, ?)
+                """,
+                (pid, comanda_id, qty)
+            )
+            cursor.execute(
+                "UPDATE dbo.Produs SET Stoc = ? WHERE ProdusId = ?",
+                (products_by_id[pid] - qty, pid)
+            )
+
+        conn.commit()
+        session['cart'] = {}
+        session.modified = True
+        if discount_pct:
+            flash(f"Loyalty discount applied: {discount_pct}%")
+        flash("Order placed successfully!")
+        return redirect(url_for('customer_orders'))
+    except Exception as e:
+        conn.rollback()
+        flash(f"An error occurred: {str(e)}")
+        return redirect(url_for('customer_cart'))
+
 
 @app.route('/customer-orders')
 def customer_orders():

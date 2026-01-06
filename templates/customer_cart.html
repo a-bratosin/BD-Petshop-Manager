@@ -1,0 +1,136 @@
+<style>
+  .cart-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .cart-nav {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .cart-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .cart-table th,
+  .cart-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+  }
+  .cart-table img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 6px;
+    background: #f4f4f4;
+  }
+  .cart-total {
+    margin-top: 12px;
+    font-weight: bold;
+  }
+  .qty-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .qty-controls form {
+    margin: 0;
+  }
+  .cart-actions {
+    margin-top: 12px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .cart-actions button {
+    padding: 8px 12px;
+  }
+  .flashes {
+    padding-left: 16px;
+    margin-bottom: 12px;
+  }
+</style>
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<div class="cart-header">
+  <h1>Your Cart</h1>
+  <div class="cart-nav">
+    <a href="/customer-shop">Shop</a>
+    <a href="/customer-dashboard">Dashboard</a>
+    <a href="/logout">Logout</a>
+  </div>
+</div>
+
+{% if items %}
+  <table class="cart-table">
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>Price</th>
+        <th>Qty</th>
+        <th>Total</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+        <tr>
+          <td>
+            {% if item.image %}
+              <img src="data:image/jpeg;base64,{{ item.image }}" alt="{{ item.descriere }}">
+            {% else %}
+              <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="No image available">
+            {% endif %}
+            {{ item.descriere }}
+          </td>
+          <td>${{ "{:,.2f}".format(item.price) }}</td>
+          <td>
+            <div class="qty-controls">
+              <form method="post" action="/customer-cart/update">
+                <input type="hidden" name="product_id" value="{{ item.id }}">
+                <input type="hidden" name="action" value="dec">
+                <button type="submit">-</button>
+              </form>
+              <span>{{ item.qty }}</span>
+              <form method="post" action="/customer-cart/update">
+                <input type="hidden" name="product_id" value="{{ item.id }}">
+                <input type="hidden" name="action" value="inc">
+                <button type="submit">+</button>
+              </form>
+            </div>
+          </td>
+          <td>${{ "{:,.2f}".format(item.line_total) }}</td>
+          <td>
+            <form method="post" action="/customer-cart/remove">
+              <input type="hidden" name="product_id" value="{{ item.id }}">
+              <button type="submit">Remove</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="cart-total">Total: ${{ "{:,.2f}".format(total) }}</div>
+  <div class="cart-actions">
+    <form method="post" action="/customer-cart/confirm" onsubmit="return confirm('Place this order now?');">
+      <button type="submit">Confirm order</button>
+    </form>
+  </div>
+{% else %}
+  <p>Your cart is empty.</p>
+{% endif %}
