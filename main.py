@@ -18,6 +18,7 @@ print("Connected!")
 app = Flask(__name__)
 app.config['SECRET_KEY'] = getenv("SESSION_KEY")
 app.config['SERVER_INSTANCE_ID'] = uuid.uuid4().hex
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 @app.before_request
 def enforce_server_session():
@@ -897,6 +898,9 @@ def create_produs():
             image_binary = None
             if file and file.filename != '':
                 image_binary = file.read()
+                if len(image_binary) > MAX_IMAGE_BYTES:
+                    flash("Image file is too large. Max size is 5 MB.")
+                    return redirect(request.url)
 
             # Database Insertion
             query = """
@@ -1656,6 +1660,104 @@ def loyalty_discount():
         discount_pct = 0
 
     return jsonify({"discount_pct": discount_pct})
+
+
+@app.route('/edit-product/<int:product_id>', methods=['GET', 'POST'])
+def edit_product(product_id):
+    # Session Checks
+    if not session.get('loggedin'):
+        flash("Please log in to access this page.")
+        return redirect(url_for('login'))
+
+    if session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT ProdusId, Imagine, Stoc, Descriere
+        FROM dbo.Produs
+        WHERE ProdusId = ?
+        """,
+        (product_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        flash("Product not found.")
+        return redirect(url_for('view_products'))
+
+    if request.method == 'POST':
+        descriere = request.form.get('Descriere', '').strip()
+        stoc_raw = request.form.get('Stoc', '').strip()
+
+        if not descriere:
+            flash("Description is required.")
+            return redirect(request.url)
+
+        try:
+            stoc = int(stoc_raw)
+        except (TypeError, ValueError):
+            flash("Stock must be a number.")
+            return redirect(request.url)
+
+        if stoc < 0:
+            flash("Stock must be zero or greater.")
+            return redirect(request.url)
+
+        file = request.files.get('Imagine')
+        update_image = False
+        image_binary = None
+
+        if file and file.filename:
+            update_image = True
+            image_binary = file.read()
+            if len(image_binary) > MAX_IMAGE_BYTES:
+                flash("Image file is too large. Max size is 5 MB.")
+                return redirect(request.url)
+        elif request.form.get('RemoveImage') == '1':
+            update_image = True
+            image_binary = None
+
+        try:
+            if update_image:
+                cursor.execute(
+                    """
+                    UPDATE dbo.Produs
+                    SET Imagine = ?, Stoc = ?, Descriere = ?
+                    WHERE ProdusId = ?
+                    """,
+                    (Binary(image_binary) if image_binary else None, stoc, descriere, product_id)
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE dbo.Produs
+                    SET Stoc = ?, Descriere = ?
+                    WHERE ProdusId = ?
+                    """,
+                    (stoc, descriere, product_id)
+                )
+            conn.commit()
+            flash("Product updated successfully.")
+            return redirect(url_for('view_products'))
+        except Exception as e:
+            conn.rollback()
+            flash(f"An error occurred: {str(e)}")
+            return redirect(request.url)
+
+    image_base64 = None
+    if row.Imagine:
+        image_base64 = base64.b64encode(row.Imagine).decode('utf-8')
+
+    product = {
+        "id": row.ProdusId,
+        "image": image_base64,
+        "stoc": int(row.Stoc) if row.Stoc is not None else 0,
+        "descriere": row.Descriere or ""
+    }
+
+    return render_template('edit_product.html', product=product)
 
 
 @app.route('/view-products')

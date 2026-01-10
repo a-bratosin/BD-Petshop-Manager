@@ -1,0 +1,49 @@
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<h2>Edit Product</h2>
+
+<form action="/edit-product/{{ product.id }}" method="POST" enctype="multipart/form-data">
+    <div>
+        <strong>Current image:</strong>
+        {% if product.image %}
+            <div>
+                <img src="data:image/jpeg;base64,{{ product.image }}" alt="Product Image" style="width: 120px; height: auto;">
+            </div>
+        {% else %}
+            <div>No Image</div>
+        {% endif %}
+    </div>
+
+    <div>
+        <label for="Imagine">Replace image:</label>
+        <input type="file" name="Imagine" id="Imagine" accept="image/*">
+    </div>
+
+    <div>
+        <label>
+            <input type="checkbox" name="RemoveImage" value="1">
+            Remove image
+        </label>
+    </div>
+
+    <div>
+        <label for="Descriere">Name/Description:</label>
+        <input type="text" name="Descriere" id="Descriere" maxlength="200" required value="{{ product.descriere }}">
+    </div>
+
+    <div>
+        <label for="Stoc">Stock (Stoc):</label>
+        <input type="number" name="Stoc" id="Stoc" required value="{{ product.stoc }}">
+    </div>
+
+    <button type="submit">Update Product</button>
+    <a href="/view-products">Cancel</a>
+</form>

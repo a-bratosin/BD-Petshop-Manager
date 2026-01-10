@@ -35,7 +35,7 @@
                     N/A
                 {% endif %}
             </td>
-            <td>${{ "{:,.2f}".format(product.pret) }}</td>
+            <td>{{ "{:,.2f}".format(product.pret) }} lei</td>
             <td>{{ product.stoc }}</td>
             <td>
                 <a href="/edit-product/{{ product.id }}">Edit</a>
