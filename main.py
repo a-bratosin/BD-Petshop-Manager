@@ -75,6 +75,21 @@ def fetch_product_names(cursor):
     )
     return [row.Descriere for row in cursor.fetchall()]
 
+def build_products(rows):
+    products = []
+    for row in rows:
+        image_base64 = None
+        if row.Imagine:
+            image_base64 = base64.b64encode(row.Imagine).decode('utf-8')
+        products.append({
+            "id": row.ProdusId,
+            "image": image_base64,
+            "stoc": int(row.Stoc) if row.Stoc is not None else 0,
+            "pret": float(row.Pret) if row.Pret is not None else 0.0,
+            "descriere": row.Descriere
+        })
+    return products
+
 def is_customer_session():
     return session.get('loggedin') and session.get('role') == 'customer'
 
@@ -229,30 +244,97 @@ def customer_shop():
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT
+        SELECT TOP 12
+            p.ProdusId,
+            p.Imagine,
+            p.Stoc,
+            p.Pret,
+            p.Descriere,
+            sales.TotalSold
+        FROM dbo.Produs p
+        JOIN (
+            SELECT
+                pc.ProdusId,
+                SUM(pc.ProdusComandaCantitate) AS TotalSold
+            FROM dbo.ProdusComanda pc
+            GROUP BY pc.ProdusId
+        ) sales ON sales.ProdusId = p.ProdusId
+        ORDER BY sales.TotalSold DESC, p.Descriere
+        """
+    )
+    bestsellers = build_products(cursor.fetchall())
+
+    cursor.execute(
+        """
+        SELECT TOP 1
+            c.CategorieId,
+            c.CategorieNume
+        FROM dbo.Categorie c
+        JOIN dbo.Subcategorie s ON s.CategorieId = c.CategorieId
+        JOIN dbo.Produs p ON p.SubcategorieId = s.SubcategorieId
+        GROUP BY c.CategorieId, c.CategorieNume
+        ORDER BY NEWID()
+        """
+    )
+    category_row = cursor.fetchone()
+    random_category = None
+    category_products = []
+    if category_row:
+        random_category = {
+            "id": category_row.CategorieId,
+            "name": category_row.CategorieNume
+        }
+        cursor.execute(
+            """
+            SELECT TOP 12
+                p.ProdusId,
+                p.Imagine,
+                p.Stoc,
+                p.Pret,
+                p.Descriere
+            FROM dbo.Produs p
+            JOIN dbo.Subcategorie s ON s.SubcategorieId = p.SubcategorieId
+            WHERE s.CategorieId = ?
+            ORDER BY p.Descriere
+            """,
+            (category_row.CategorieId,)
+        )
+        category_products = build_products(cursor.fetchall())
+
+    cursor.execute(
+        """
+        SELECT TOP 1
+            s.SubcategorieId,
+            s.SubcategorieNume
+        FROM dbo.Subcategorie s
+        JOIN dbo.Produs p ON p.SubcategorieId = s.SubcategorieId
+        GROUP BY s.SubcategorieId, s.SubcategorieNume
+        ORDER BY NEWID()
+        """
+    )
+    subcategory_row = cursor.fetchone()
+    random_subcategory = None
+    subcategory_products = []
+    if subcategory_row:
+        random_subcategory = {
+            "id": subcategory_row.SubcategorieId,
+            "name": subcategory_row.SubcategorieNume
+        }
+        cursor.execute(
+            """
+        SELECT TOP 12
             p.ProdusId,
             p.Imagine,
             p.Stoc,
             p.Pret,
             p.Descriere
-        FROM dbo.Produs p
-        ORDER BY p.Descriere
-        """
-    )
-    rows = cursor.fetchall()
-
-    products = []
-    for row in rows:
-        image_base64 = None
-        if row.Imagine:
-            image_base64 = base64.b64encode(row.Imagine).decode('utf-8')
-        products.append({
-            "id": row.ProdusId,
-            "image": image_base64,
-            "stoc": int(row.Stoc) if row.Stoc is not None else 0,
-            "pret": float(row.Pret) if row.Pret is not None else 0.0,
-            "descriere": row.Descriere
-        })
+            FROM dbo.Produs p
+            WHERE p.SubcategorieId = ?
+            ORDER BY p.Descriere
+            """,
+            (subcategory_row.SubcategorieId,)
+        )
+        subcategory_products = build_products(cursor.fetchall())
 
     product_names = fetch_product_names(cursor)
     categories = fetch_categories(cursor)
@@ -261,7 +343,11 @@ def customer_shop():
 
     return render_template(
         'customer_shop.html',
-        products=products,
+        bestsellers=bestsellers,
+        random_category=random_category,
+        category_products=category_products,
+        random_subcategory=random_subcategory,
+        subcategory_products=subcategory_products,
         cart_count=cart_count,
         product_names=product_names,
         categories=categories,

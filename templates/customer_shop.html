@@ -4,6 +4,20 @@
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     gap: 16px;
   }
+  .shop-grid--carousel {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    padding-bottom: 4px;
+  }
+  .shop-grid--carousel::-webkit-scrollbar {
+    height: 6px;
+  }
+  .shop-grid--carousel::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 999px;
+  }
   .shop-card {
     border: 1px solid #ddd;
     border-radius: 8px;
@@ -11,6 +25,7 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+    min-width: 220px;
   }
   .shop-card img {
     width: 100%;
@@ -40,6 +55,46 @@
     color: inherit;
     text-decoration: none;
   }
+  .shop-section {
+    margin-bottom: 28px;
+  }
+  .shop-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+  .shop-section h2 {
+    margin: 0 0 12px;
+  }
+  .shop-section-header h2 {
+    margin: 0;
+  }
+  .shop-carousel-controls {
+    display: flex;
+    gap: 8px;
+  }
+  .carousel-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid #ccc;
+    background: #fff;
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .carousel-btn:disabled {
+    cursor: not-allowed;
+    color: #aaa;
+    border-color: #e0e0e0;
+    background: #f7f7f7;
+  }
+  .shop-empty {
+    margin: 0;
+    color: #666;
+  }
   .flashes {
     padding-left: 16px;
     margin-bottom: 12px;
@@ -62,25 +117,154 @@
 {% set search_query = "" %}
 {% include "_customer_shop_header.html" %}
 
-<div class="shop-grid">
-  {% for product in products %}
-    <div class="shop-card">
-      <a class="shop-link" href="/product/{{ product.id }}">
-        {% if product.image %}
-          <img src="data:image/jpeg;base64,{{ product.image }}" alt="{{ product.descriere }}">
-        {% else %}
-          <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="No image available">
-        {% endif %}
-        <h3>{{ product.descriere }}</h3>
-      </a>
-      <div class="shop-meta">
-        <span>${{ "{:,.2f}".format(product.pret) }}</span>
-        <span>Stock: {{ product.stoc }}</span>
-      </div>
-      <form method="post" action="/cart/add">
-        <input type="hidden" name="product_id" value="{{ product.id }}">
-        <button type="submit" {% if product.stoc <= 0 %}disabled{% endif %}>Add to cart</button>
-      </form>
+<div class="shop-section">
+  <div class="shop-section-header">
+    <h2>Bestsellers</h2>
+    <div class="shop-carousel-controls">
+      <button class="carousel-btn prev" type="button" aria-label="Previous items" disabled>&lsaquo;</button>
+      <button class="carousel-btn next" type="button" aria-label="Next items">&rsaquo;</button>
     </div>
-  {% endfor %}
+  </div>
+  {% if bestsellers %}
+    <div class="shop-grid shop-grid--carousel" data-items="{{ bestsellers|length }}">
+      {% for product in bestsellers %}
+        <div class="shop-card">
+          <a class="shop-link" href="/product/{{ product.id }}">
+            {% if product.image %}
+              <img src="data:image/jpeg;base64,{{ product.image }}" alt="{{ product.descriere }}">
+            {% else %}
+              <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="No image available">
+            {% endif %}
+            <h3>{{ product.descriere }}</h3>
+          </a>
+          <div class="shop-meta">
+            <span>${{ "{:,.2f}".format(product.pret) }}</span>
+            <span>Stock: {{ product.stoc }}</span>
+          </div>
+          <form method="post" action="/cart/add">
+            <input type="hidden" name="product_id" value="{{ product.id }}">
+            <button type="submit" {% if product.stoc <= 0 %}disabled{% endif %}>Add to cart</button>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="shop-empty">No bestseller data yet.</p>
+  {% endif %}
 </div>
+
+<div class="shop-section">
+  {% if random_category %}
+    <div class="shop-section-header">
+      <h2>Items in {{ random_category.name }}</h2>
+      <div class="shop-carousel-controls">
+        <button class="carousel-btn prev" type="button" aria-label="Previous items" disabled>&lsaquo;</button>
+        <button class="carousel-btn next" type="button" aria-label="Next items">&rsaquo;</button>
+      </div>
+    </div>
+    {% if category_products %}
+      <div class="shop-grid shop-grid--carousel" data-items="{{ category_products|length }}">
+        {% for product in category_products %}
+          <div class="shop-card">
+            <a class="shop-link" href="/product/{{ product.id }}">
+              {% if product.image %}
+                <img src="data:image/jpeg;base64,{{ product.image }}" alt="{{ product.descriere }}">
+              {% else %}
+                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="No image available">
+              {% endif %}
+              <h3>{{ product.descriere }}</h3>
+            </a>
+            <div class="shop-meta">
+              <span>${{ "{:,.2f}".format(product.pret) }}</span>
+              <span>Stock: {{ product.stoc }}</span>
+            </div>
+            <form method="post" action="/cart/add">
+              <input type="hidden" name="product_id" value="{{ product.id }}">
+              <button type="submit" {% if product.stoc <= 0 %}disabled{% endif %}>Add to cart</button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="shop-empty">No items found in this category.</p>
+    {% endif %}
+  {% else %}
+    <p class="shop-empty">No categories with items found.</p>
+  {% endif %}
+</div>
+
+<div class="shop-section">
+  {% if random_subcategory %}
+    <div class="shop-section-header">
+      <h2>Items in {{ random_subcategory.name }}</h2>
+      <div class="shop-carousel-controls">
+        <button class="carousel-btn prev" type="button" aria-label="Previous items" disabled>&lsaquo;</button>
+        <button class="carousel-btn next" type="button" aria-label="Next items">&rsaquo;</button>
+      </div>
+    </div>
+    {% if subcategory_products %}
+      <div class="shop-grid shop-grid--carousel" data-items="{{ subcategory_products|length }}">
+        {% for product in subcategory_products %}
+          <div class="shop-card">
+            <a class="shop-link" href="/product/{{ product.id }}">
+              {% if product.image %}
+                <img src="data:image/jpeg;base64,{{ product.image }}" alt="{{ product.descriere }}">
+              {% else %}
+                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" alt="No image available">
+              {% endif %}
+              <h3>{{ product.descriere }}</h3>
+            </a>
+            <div class="shop-meta">
+              <span>${{ "{:,.2f}".format(product.pret) }}</span>
+              <span>Stock: {{ product.stoc }}</span>
+            </div>
+            <form method="post" action="/cart/add">
+              <input type="hidden" name="product_id" value="{{ product.id }}">
+              <button type="submit" {% if product.stoc <= 0 %}disabled{% endif %}>Add to cart</button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="shop-empty">No items found in this subcategory.</p>
+    {% endif %}
+  {% else %}
+    <p class="shop-empty">No subcategories with items found.</p>
+  {% endif %}
+</div>
+
+<script>
+  const carousels = document.querySelectorAll('.shop-grid--carousel');
+
+  carousels.forEach((carousel) => {
+    const section = carousel.closest('.shop-section');
+    const prev = section.querySelector('.carousel-btn.prev');
+    const next = section.querySelector('.carousel-btn.next');
+    const totalItems = parseInt(carousel.dataset.items || '0', 10);
+
+    const updateButtons = () => {
+      const maxScroll = carousel.scrollWidth - carousel.clientWidth;
+      const atStart = carousel.scrollLeft <= 1;
+      const atEnd = carousel.scrollLeft >= maxScroll - 1;
+      const tooFew = totalItems < 12;
+
+      prev.disabled = tooFew || atStart;
+      next.disabled = tooFew || atEnd;
+    };
+
+    prev.addEventListener('click', () => {
+      carousel.scrollBy({ left: -carousel.clientWidth, behavior: 'smooth' });
+    });
+
+    next.addEventListener('click', () => {
+      carousel.scrollBy({ left: carousel.clientWidth, behavior: 'smooth' });
+    });
+
+    carousel.addEventListener('scroll', () => {
+      window.requestAnimationFrame(updateButtons);
+    });
+
+    window.addEventListener('resize', updateButtons);
+    updateButtons();
+  });
+</script>
