@@ -8,6 +8,12 @@
   {% endif %}
 {% endwith %}
 
+{% set header_title = "Order Details" %}
+{% set show_search = false %}
+{% set search_action = "/shop/search" %}
+{% set search_query = "" %}
+{% include "_customer_shop_header.html" %}
+
 <h1>Order Details</h1>
 
 <p><strong>Order ID:</strong> {{ order.id }}</p>

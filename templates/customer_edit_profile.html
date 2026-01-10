@@ -8,6 +8,12 @@
   {% endif %}
 {% endwith %}
 
+{% set header_title = "Edit Profile" %}
+{% set show_search = false %}
+{% set search_action = "/shop/search" %}
+{% set search_query = "" %}
+{% include "_customer_shop_header.html" %}
+
 <h1>Edit Profile</h1>
 
 <form action="/customer-edit-profile" method="POST">

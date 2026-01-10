@@ -8,6 +8,12 @@
   {% endif %}
 {% endwith %}
 
+{% set header_title = "Order History" %}
+{% set show_search = false %}
+{% set search_action = "/shop/search" %}
+{% set search_query = "" %}
+{% include "_customer_shop_header.html" %}
+
 <h1>Your Order History</h1>
 
 <table border="1" cellpadding="10">

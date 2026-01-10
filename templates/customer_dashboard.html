@@ -8,6 +8,12 @@
   {% endif %}
 {% endwith %}
 
+{% set header_title = "My Account" %}
+{% set show_search = false %}
+{% set search_action = "/shop/search" %}
+{% set search_query = "" %}
+{% include "_customer_shop_header.html" %}
+
 <h1>Customer Dashboard</h1>
 <ul>
     <li><a href="/shop">Shop</a></li>

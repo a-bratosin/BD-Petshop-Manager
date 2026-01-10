@@ -8,6 +8,12 @@
   {% endif %}
 {% endwith %}
 
+{% set header_title = "Personal Details" %}
+{% set show_search = false %}
+{% set search_action = "/shop/search" %}
+{% set search_query = "" %}
+{% include "_customer_shop_header.html" %}
+
 <h1>Personal Details</h1>
 
 <p><strong>Name:</strong> {{ customer.name }}</p>
