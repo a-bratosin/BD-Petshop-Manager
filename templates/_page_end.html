@@ -1,0 +1,20 @@
+﻿  </div>
+  <script>
+    document.querySelectorAll(".flashes li").forEach((item) => {
+      const closeButton = item.querySelector(".flash-close");
+      if (closeButton) {
+        closeButton.addEventListener("click", () => {
+          item.classList.add("hide");
+          setTimeout(() => item.remove(), 200);
+        });
+      }
+
+      item.addEventListener("animationend", (event) => {
+        if (event.animationName === "flashFade") {
+          item.remove();
+        }
+      });
+    });
+  </script>
+</body>
+</html>

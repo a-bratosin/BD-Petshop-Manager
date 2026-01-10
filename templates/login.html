@@ -1,33 +1,18 @@
-<!DOCTYPE html>
-<html lang="en">
+﻿{% set title = "Login" %}
+{% include "_page_start.html" %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
-    <title>Login</title>
-</head>
+<div class="auth-card">
+  <h2>Login</h2>
+  <form action="{{ url_for('login') }}" method="post" class="stack">
+    <div class="flash-inline">{{ msg }}</div>
+    <input type="hidden" name="next" value="{{ next or '' }}">
 
+    <input class="textbox" type="text" name="username" placeholder="Enter Username" required>
+    <input class="textbox" type="password" name="password" placeholder="Enter Password" required>
 
+    <button class="btn" type="submit">Login</button>
+  </form>
+  <a class="btn" href="/register">Not a customer? Register</a>
+</div>
 
-<body>
-    <div class="container"> <!-- Wrapper for form -->
-        <h2 class="word">Login</h2>
-
-        <form action="{{ url_for('login') }}" method="post">
-            <div>{{ msg }}</div>
-            <input type="hidden" name="next" value="{{ next or '' }}">
-
-            <input class="textbox" type="text" name="username" placeholder="Enter Username" required>
-            <input class="textbox" type="password" name="password" placeholder="Enter Password" required>
-
-            <button class="btn" type="submit">Login</button>
-        </form>
-        <a class="btn" href="/register">Not a customer? Register</a>
-    </div>
-
-
-</body>
-
-
-</html>
+{% include "_page_end.html" %}

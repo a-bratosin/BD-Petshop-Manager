@@ -1,8 +1,10 @@
+﻿{% include '_page_start.html' %}
+
 {% with messages = get_flashed_messages() %}
   {% if messages %}
     <ul class="flashes">
       {% for message in messages %}
-        <li>{{ message }}</li>
+        <li><span>{{ message }}</span><button class="flash-close" type="button" aria-label="Close">&times;</button></li>
       {% endfor %}
     </ul>
   {% endif %}
@@ -11,7 +13,7 @@
 {% include '_employee_header.html' %}
 
 <h1>Employee Dashboard</h1>
-<ul>
+<ul class="nav-grid">
     <li><a href="/create-category">Create Category</a></li>
     <li><a href="/create-subcategory">Create Subcategory</a></li>
     <li><a href="/view-products">View Products</a></li>
@@ -22,3 +24,7 @@
     <li><a href="/analytics">Analytics</a></li>
     <li><a href="/logout">Logout</a></li>
 </ul>
+
+{% include '_page_end.html' %}
+
+

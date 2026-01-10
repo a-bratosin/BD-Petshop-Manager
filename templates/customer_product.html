@@ -1,3 +1,5 @@
+﻿{% include '_page_start.html' %}
+
 <style>
   .product-card {
     border: 1px solid #ddd;
@@ -43,7 +45,7 @@
   {% if messages %}
     <ul class="flashes">
       {% for message in messages %}
-        <li>{{ message }}</li>
+        <li><span>{{ message }}</span><button class="flash-close" type="button" aria-label="Close">&times;</button></li>
       {% endfor %}
     </ul>
   {% endif %}
@@ -72,3 +74,7 @@
     <button type="submit" {% if product.stoc <= 0 %}disabled{% endif %}>Add to cart</button>
   </form>
 </div>
+
+{% include '_page_end.html' %}
+
+

@@ -1,8 +1,10 @@
+﻿{% include '_page_start.html' %}
+
 {% include '_employee_header.html' %}
 
 <h2>Customer List</h2>
 
-<table border="1" cellpadding="10">
+<table class="table table-striped table-hover">
     <thead>
         <tr>
             <th>ID</th>
@@ -27,3 +29,6 @@
 
 <br>
 <a href="/create-customer">Register New Customer</a>
+
+{% include '_page_end.html' %}
+

@@ -1,8 +1,10 @@
+﻿{% include '_page_start.html' %}
+
 {% with messages = get_flashed_messages() %}
   {% if messages %}
     <ul class="flashes">
       {% for message in messages %}
-        <li>{{ message }}</li>
+        <li><span>{{ message }}</span><button class="flash-close" type="button" aria-label="Close">&times;</button></li>
       {% endfor %}
     </ul>
   {% endif %}
@@ -56,3 +58,7 @@
     </div>
     <button type="submit">Add Customer</button>
 </form>
+
+{% include '_page_end.html' %}
+
+
