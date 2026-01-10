@@ -8,6 +8,8 @@
   {% endif %}
 {% endwith %}
 
+{% include '_employee_header.html' %}
+
 <h2>Edit Product</h2>
 
 <form action="/edit-product/{{ product.id }}" method="POST" enctype="multipart/form-data">
