@@ -1,0 +1,56 @@
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<h1>Edit Profile</h1>
+
+<form action="/customer-edit-profile" method="POST">
+    <div>
+        <label for="Nume">First Name:</label>
+        <input type="text" name="Nume" id="Nume" required value="{{ customer.nume }}">
+    </div>
+
+    <div>
+        <label for="Prenume">Last Name:</label>
+        <input type="text" name="Prenume" id="Prenume" required value="{{ customer.prenume }}">
+    </div>
+
+    <div>
+        <label for="Strada">Street:</label>
+        <input type="text" name="Strada" id="Strada" required value="{{ customer.strada }}">
+    </div>
+
+    <div>
+        <label for="Numar">Number:</label>
+        <input type="text" name="Numar" id="Numar" required value="{{ customer.numar }}">
+    </div>
+
+    <div>
+        <label for="Oras">City:</label>
+        <input type="text" name="Oras" id="Oras" required value="{{ customer.oras }}">
+    </div>
+
+    <div>
+        <label for="Judet">County:</label>
+        <input type="text" name="Judet" id="Judet" required value="{{ customer.judet }}">
+    </div>
+
+    <div>
+        <label for="Password">New Password:</label>
+        <input type="password" name="Password" id="Password" autocomplete="new-password">
+    </div>
+
+    <div>
+        <label for="PasswordConfirm">Confirm Password:</label>
+        <input type="password" name="PasswordConfirm" id="PasswordConfirm" autocomplete="new-password">
+    </div>
+
+    <button type="submit">Save Changes</button>
+    <a href="/customer-details">Cancel</a>
+</form>

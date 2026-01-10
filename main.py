@@ -850,6 +850,86 @@ def customer_details():
     return render_template('customer_details.html', customer=customer)
 
 
+@app.route('/customer-edit-profile', methods=['GET', 'POST'])
+def customer_edit_profile():
+    if not session.get('loggedin') or session.get('role') != 'customer':
+        flash("Unauthorized: This action requires customer privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT ClientNume, ClientPrenume, ClientStrada, ClientNumar, ClientOras, ClientJudet
+        FROM dbo.Client
+        WHERE UserId = ?
+        """,
+        (session.get('id'),)
+    )
+    row = cursor.fetchone()
+    if not row:
+        flash("Customer record not found.")
+        return redirect(url_for('customer_dashboard'))
+
+    if request.method == 'POST':
+        nume = request.form.get('Nume', '').strip()
+        prenume = request.form.get('Prenume', '').strip()
+        strada = request.form.get('Strada', '').strip()
+        numar = request.form.get('Numar', '').strip()
+        oras = request.form.get('Oras', '').strip()
+        judet = request.form.get('Judet', '').strip()
+        password = request.form.get('Password', '')
+        password_confirm = request.form.get('PasswordConfirm', '')
+
+        if not (nume and prenume and strada and numar and oras and judet):
+            flash("All name and address fields are required.")
+            return redirect(request.url)
+
+        if password or password_confirm:
+            if password != password_confirm:
+                flash("Passwords do not match.")
+                return redirect(request.url)
+
+        try:
+            cursor.execute(
+                """
+                UPDATE dbo.Client
+                SET ClientNume = ?, ClientPrenume = ?, ClientStrada = ?, ClientNumar = ?, ClientOras = ?, ClientJudet = ?
+                WHERE UserId = ?
+                """,
+                (nume, prenume, strada, numar, oras, judet, session.get('id'))
+            )
+
+            if password:
+                password_hash = hashlib.sha256(password.encode()).hexdigest()
+                cursor.execute(
+                    """
+                    UPDATE dbo.Utilizatori
+                    SET Password = ?
+                    WHERE UserId = ?
+                    """,
+                    (password_hash, session.get('id'))
+                )
+
+            conn.commit()
+            flash("Profile updated successfully.")
+            return redirect(url_for('customer_details'))
+        except Exception as e:
+            conn.rollback()
+            flash(f"An error occurred: {str(e)}")
+            return redirect(request.url)
+
+    customer = {
+        "nume": row.ClientNume or "",
+        "prenume": row.ClientPrenume or "",
+        "strada": row.ClientStrada or "",
+        "numar": row.ClientNumar or "",
+        "oras": row.ClientOras or "",
+        "judet": row.ClientJudet or "",
+    }
+
+    return render_template('customer_edit_profile.html', customer=customer)
+
+
 @app.route('/logout')
 def logout():
     session.pop('loggedin', None)
