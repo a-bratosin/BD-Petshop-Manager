@@ -70,9 +70,14 @@
 <div class="cart-header">
   <h1>Your Cart</h1>
   <div class="cart-nav">
-    <a href="/customer-shop">Shop</a>
-    <a href="/customer-dashboard">Dashboard</a>
-    <a href="/logout">Logout</a>
+    <a href="/shop">Shop</a>
+    {% if is_guest %}
+      <a href="/login">Login</a>
+      <a href="/register">Register</a>
+    {% else %}
+      <a href="/customer-dashboard">Dashboard</a>
+      <a href="/logout">Logout</a>
+    {% endif %}
   </div>
 </div>
 
@@ -101,13 +106,13 @@
           <td>${{ "{:,.2f}".format(item.price) }}</td>
           <td>
             <div class="qty-controls">
-              <form method="post" action="/customer-cart/update">
+              <form method="post" action="/cart/update">
                 <input type="hidden" name="product_id" value="{{ item.id }}">
                 <input type="hidden" name="action" value="dec">
                 <button type="submit">-</button>
               </form>
               <span>{{ item.qty }}</span>
-              <form method="post" action="/customer-cart/update">
+              <form method="post" action="/cart/update">
                 <input type="hidden" name="product_id" value="{{ item.id }}">
                 <input type="hidden" name="action" value="inc">
                 <button type="submit">+</button>
@@ -116,7 +121,7 @@
           </td>
           <td>${{ "{:,.2f}".format(item.line_total) }}</td>
           <td>
-            <form method="post" action="/customer-cart/remove">
+            <form method="post" action="/cart/remove">
               <input type="hidden" name="product_id" value="{{ item.id }}">
               <button type="submit">Remove</button>
             </form>
@@ -127,10 +132,20 @@
   </table>
   <div class="cart-total">Total: ${{ "{:,.2f}".format(total) }}</div>
   <div class="cart-actions">
-    <form method="post" action="/customer-cart/confirm" onsubmit="return confirm('Place this order now?');">
-      <button type="submit">Confirm order</button>
-    </form>
-    <form method="post" action="/customer-cart/clear" onsubmit="return confirm('Clear your cart?');">
+    {% if is_guest %}
+      <button type="button" onclick="guestCheckoutPrompt()">Confirm order</button>
+      <script>
+        function guestCheckoutPrompt() {
+          alert("You need to log in to place an order.");
+          window.location.href = "/login?next=/cart";
+        }
+      </script>
+    {% else %}
+      <form method="post" action="/cart/confirm" onsubmit="return confirm('Place this order now?');">
+        <button type="submit">Confirm order</button>
+      </form>
+    {% endif %}
+    <form method="post" action="/cart/clear" onsubmit="return confirm('Clear your cart?');">
       <button type="submit">Clear cart</button>
     </form>
   </div>

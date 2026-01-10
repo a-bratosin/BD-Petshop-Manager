@@ -23,8 +23,12 @@ MAX_IMAGE_BYTES = 5 * 1024 * 1024
 @app.before_request
 def enforce_server_session():
     server_id = app.config.get('SERVER_INSTANCE_ID')
-    if session and session.get('server_instance') != server_id:
-        session.clear()
+    if session:
+        session_server = session.get('server_instance')
+        if session_server and session_server != server_id:
+            session.clear()
+        elif not session_server:
+            session['server_instance'] = server_id
 
 def fetch_categories(cursor):
     cursor.execute(
@@ -71,13 +75,22 @@ def fetch_product_names(cursor):
     )
     return [row.Descriere for row in cursor.fetchall()]
 
+def is_customer_session():
+    return session.get('loggedin') and session.get('role') == 'customer'
+
+def allow_customer_or_guest():
+    if session.get('loggedin'):
+        return session.get('role') == 'customer'
+    return True
+
 @app.route("/")
 def hello_world():
-    return "<p>Hello, World!</p>"
+    return redirect(url_for('customer_shop'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     msg = ''
+    next_path = request.args.get('next') or request.form.get('next') or ''
     if request.method == 'POST' and 'username' in request.form and 'password' in request.form:
         username = request.form['username']
         password = request.form['password']
@@ -97,10 +110,96 @@ def login():
             if session['role'] == 'employee':
                 return redirect(url_for('employee_dashboard'))
             else:
+                if next_path.startswith('/'):
+                    return redirect(next_path)
                 return redirect(url_for('customer_dashboard'))
         else:
             msg = 'Incorrect username/password!'
-    return render_template('login.html', msg=msg)
+    return render_template('login.html', msg=msg, next=next_path)
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if session.get('loggedin'):
+        if session.get('role') == 'customer':
+            return redirect(url_for('customer_shop'))
+        return redirect(url_for('employee_dashboard'))
+
+    if request.method == 'POST':
+        nume = request.form.get('Nume')
+        prenume = request.form.get('Prenume')
+        email = request.form.get('Email')
+        telefon = request.form.get('Telefon')
+        strada = request.form.get('Strada')
+        numar = request.form.get('Numar')
+        oras = request.form.get('Oras')
+        judet = request.form.get('Judet')
+        password = request.form.get('Password')
+        password_confirm = request.form.get('PasswordConfirm')
+
+        if not (nume and prenume and email and telefon and strada and numar and oras and judet and password and password_confirm):
+            flash("All fields are required.")
+            return redirect(request.url)
+        if password != password_confirm:
+            flash("Passwords do not match.")
+            return redirect(request.url)
+
+        if not re.fullmatch(r'\d{10}', telefon):
+            flash("Phone number must be exactly 10 digits.")
+            return redirect(request.url)
+        if not re.fullmatch(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            flash("Invalid email address format.")
+            return redirect(request.url)
+
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM dbo.Client WHERE ClientTelefon = ?", (telefon,))
+        exists = cursor.fetchone()[0]
+        if exists:
+            flash("A customer with this phone already exists.")
+            return redirect(request.url)
+
+        cursor.execute("SELECT COUNT(*) FROM dbo.Utilizatori WHERE Username = ?", (email,))
+        user_exists = cursor.fetchone()[0]
+        if user_exists:
+            flash("A user with this address already exists.")
+            return redirect(request.url)
+
+        try:
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            cursor.execute("""
+                INSERT INTO dbo.Utilizatori (Username, Password, UserCategory)
+                OUTPUT INSERTED.UserId
+                VALUES (?, ?, ?)
+            """, (email, password_hash, 'customer'))
+            user_id = cursor.fetchone()[0]
+
+            cursor.execute("""
+                INSERT INTO dbo.Client (UserId, ClientNume, ClientPrenume, ClientTelefon, ClientStrada, ClientNumar, ClientOras, ClientJudet)
+                OUTPUT INSERTED.ClientId
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, nume, prenume, telefon, strada, numar, oras, judet))
+            client_id = cursor.fetchone()[0]
+
+            if request.form.get('CardFidelitate'):
+                now = datetime.now()
+                cursor.execute("""
+                    INSERT INTO dbo.CardFidelitate (ClientId, DataInregistrarii)
+                    VALUES (?, ?)
+                """, (client_id, now))
+
+            conn.commit()
+            session['loggedin'] = True
+            session['id'] = user_id
+            session['username'] = email.strip()
+            session['role'] = 'customer'
+            session['server_instance'] = app.config.get('SERVER_INSTANCE_ID')
+            flash("Registration successful! You're now logged in.")
+            return redirect(url_for('customer_dashboard'))
+        except Exception as e:
+            conn.rollback()
+            flash(f"An error occurred: {str(e)}")
+            return redirect(request.url)
+
+    return render_template('register.html')
 # Employee dashboard route
 @app.route('/employee-dashboard')
 def employee_dashboard():
@@ -118,9 +217,9 @@ def customer_dashboard():
 
     return render_template('customer_dashboard.html', cart_count=cart_count)
 
-@app.route('/customer-shop')
+@app.route('/shop')
 def customer_shop():
-    if not session.get('loggedin') or session.get('role') != 'customer':
+    if not allow_customer_or_guest():
         flash("Unauthorized: This action requires customer privileges.")
         return redirect(url_for('login'))
 
@@ -158,18 +257,20 @@ def customer_shop():
     product_names = fetch_product_names(cursor)
     categories = fetch_categories(cursor)
     cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
+    is_guest = not session.get('loggedin')
 
     return render_template(
         'customer_shop.html',
         products=products,
         cart_count=cart_count,
         product_names=product_names,
-        categories=categories
+        categories=categories,
+        is_guest=is_guest
     )
 
-@app.route('/customer-shop/search')
+@app.route('/shop/search')
 def customer_shop_search():
-    if not session.get('loggedin') or session.get('role') != 'customer':
+    if not allow_customer_or_guest():
         flash("Unauthorized: This action requires customer privileges.")
         return redirect(url_for('login'))
 
@@ -211,6 +312,7 @@ def customer_shop_search():
     categories = fetch_categories(cursor)
 
     cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
+    is_guest = not session.get('loggedin')
 
     return render_template(
         'customer_search.html',
@@ -218,12 +320,13 @@ def customer_shop_search():
         cart_count=cart_count,
         product_names=product_names,
         categories=categories,
-        query=query
+        query=query,
+        is_guest=is_guest
     )
 
-@app.route('/customer-shop/category/<int:category_id>')
+@app.route('/shop/category/<int:category_id>')
 def customer_category_view(category_id):
-    if not session.get('loggedin') or session.get('role') != 'customer':
+    if not allow_customer_or_guest():
         flash("Unauthorized: This action requires customer privileges.")
         return redirect(url_for('login'))
 
@@ -270,6 +373,7 @@ def customer_category_view(category_id):
     product_names = fetch_product_names(cursor)
     categories = fetch_categories(cursor)
     cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
+    is_guest = not session.get('loggedin')
 
     return render_template(
         'customer_category.html',
@@ -277,12 +381,13 @@ def customer_category_view(category_id):
         cart_count=cart_count,
         product_names=product_names,
         categories=categories,
-        heading=f"Category: {category_row.CategorieNume}"
+        heading=f"Category: {category_row.CategorieNume}",
+        is_guest=is_guest
     )
 
-@app.route('/customer-shop/subcategory/<int:subcategory_id>')
+@app.route('/shop/subcategory/<int:subcategory_id>')
 def customer_subcategory_view(subcategory_id):
-    if not session.get('loggedin') or session.get('role') != 'customer':
+    if not allow_customer_or_guest():
         flash("Unauthorized: This action requires customer privileges.")
         return redirect(url_for('login'))
 
@@ -332,6 +437,7 @@ def customer_subcategory_view(subcategory_id):
     product_names = fetch_product_names(cursor)
     categories = fetch_categories(cursor)
     cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
+    is_guest = not session.get('loggedin')
 
     return render_template(
         'customer_category.html',
@@ -339,12 +445,13 @@ def customer_subcategory_view(subcategory_id):
         cart_count=cart_count,
         product_names=product_names,
         categories=categories,
-        heading=f"Subcategory: {sub_row.SubcategorieNume}"
+        heading=f"Subcategory: {sub_row.SubcategorieNume}",
+        is_guest=is_guest
     )
 
 @app.route('/product/<int:product_id>')
 def customer_product_details(product_id):
-    if not session.get('loggedin') or session.get('role') != 'customer':
+    if not allow_customer_or_guest():
         flash("Unauthorized: This action requires customer privileges.")
         return redirect(url_for('login'))
 
@@ -376,17 +483,19 @@ def customer_product_details(product_id):
 
     categories = fetch_categories(cursor)
     cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
+    is_guest = not session.get('loggedin')
 
     return render_template(
         'customer_product.html',
         product=product,
         cart_count=cart_count,
-        categories=categories
+        categories=categories,
+        is_guest=is_guest
     )
 
-@app.route('/customer-cart')
+@app.route('/cart')
 def customer_cart():
-    if not session.get('loggedin') or session.get('role') != 'customer':
+    if not allow_customer_or_guest():
         flash("Unauthorized: This action requires customer privileges.")
         return redirect(url_for('login'))
 
@@ -428,11 +537,13 @@ def customer_cart():
 
     cart_count = sum(int(qty) for qty in cart.values())
 
-    return render_template('customer_cart.html', items=items, total=total, cart_count=cart_count)
+    is_guest = not session.get('loggedin')
 
-@app.route('/customer-cart/add', methods=['POST'])
+    return render_template('customer_cart.html', items=items, total=total, cart_count=cart_count, is_guest=is_guest)
+
+@app.route('/cart/add', methods=['POST'])
 def customer_cart_add():
-    if not session.get('loggedin') or session.get('role') != 'customer':
+    if not allow_customer_or_guest():
         flash("Unauthorized: This action requires customer privileges.")
         return redirect(url_for('login'))
 
@@ -480,9 +591,9 @@ def customer_cart_add():
     flash(f"Added '{row.Descriere}' to your cart.")
     return redirect(request.referrer or url_for('customer_shop'))
 
-@app.route('/customer-cart/clear', methods=['POST'])
+@app.route('/cart/clear', methods=['POST'])
 def customer_cart_clear():
-    if not session.get('loggedin') or session.get('role') != 'customer':
+    if not allow_customer_or_guest():
         flash("Unauthorized: This action requires customer privileges.")
         return redirect(url_for('login'))
 
@@ -491,9 +602,9 @@ def customer_cart_clear():
     flash("Cart cleared.")
     return redirect(url_for('customer_cart'))
 
-@app.route('/customer-cart/remove', methods=['POST'])
+@app.route('/cart/remove', methods=['POST'])
 def customer_cart_remove():
-    if not session.get('loggedin') or session.get('role') != 'customer':
+    if not allow_customer_or_guest():
         flash("Unauthorized: This action requires customer privileges.")
         return redirect(url_for('login'))
 
@@ -512,9 +623,9 @@ def customer_cart_remove():
 
     return redirect(url_for('customer_cart'))
 
-@app.route('/customer-cart/update', methods=['POST'])
+@app.route('/cart/update', methods=['POST'])
 def customer_cart_update():
-    if not session.get('loggedin') or session.get('role') != 'customer':
+    if not allow_customer_or_guest():
         flash("Unauthorized: This action requires customer privileges.")
         return redirect(url_for('login'))
 
@@ -558,9 +669,12 @@ def customer_cart_update():
 
     return redirect(url_for('customer_cart'))
 
-@app.route('/customer-cart/confirm', methods=['POST'])
+@app.route('/cart/confirm', methods=['POST'])
 def customer_cart_confirm():
-    if not session.get('loggedin') or session.get('role') != 'customer':
+    if not session.get('loggedin'):
+        flash("Please log in or register to place your order.")
+        return redirect(url_for('customer_cart'))
+    if session.get('role') != 'customer':
         flash("Unauthorized: This action requires customer privileges.")
         return redirect(url_for('login'))
 

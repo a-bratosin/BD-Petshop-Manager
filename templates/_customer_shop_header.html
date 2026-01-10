@@ -89,20 +89,25 @@
     </form>
   {% endif %}
   <div class="shop-nav">
-    <a href="/customer-shop">Shop</a>
-    <a href="/customer-cart">Cart ({{ cart_count }})</a>
-    <a href="/logout">Logout</a>
+    <a href="/shop">Shop</a>
+    <a href="/cart">Cart ({{ cart_count }})</a>
+    {% if is_guest %}
+      <a href="/login">Login</a>
+      <a href="/register">Register</a>
+    {% else %}
+      <a href="/logout">Logout</a>
+    {% endif %}
   </div>
 </div>
 
 <div class="category-bar">
   {% for category in categories %}
     <div class="category-item">
-      <a href="/customer-shop/category/{{ category.id }}">{{ category.name }}</a>
+      <a href="/shop/category/{{ category.id }}">{{ category.name }}</a>
       {% if category.subcategories %}
         <div class="subcategory-menu">
           {% for subcategory in category.subcategories %}
-            <a href="/customer-shop/subcategory/{{ subcategory.id }}">{{ subcategory.name }}</a>
+            <a href="/shop/subcategory/{{ subcategory.id }}">{{ subcategory.name }}</a>
           {% endfor %}
         </div>
       {% endif %}

@@ -51,7 +51,7 @@
 
 {% set header_title = "Product Details" %}
 {% set show_search = false %}
-{% set search_action = "/customer-shop/search" %}
+{% set search_action = "/shop/search" %}
 {% set search_query = "" %}
 {% include "_customer_shop_header.html" %}
 
@@ -66,7 +66,7 @@
     <span>Price: ${{ "{:,.2f}".format(product.pret) }}</span>
     <span>Stock: {{ product.stoc }}</span>
   </div>
-  <form class="product-actions" method="post" action="/customer-cart/add">
+  <form class="product-actions" method="post" action="/cart/add">
     <input type="hidden" name="product_id" value="{{ product.id }}">
     <input type="number" name="quantity" min="1" max="{{ product.stoc }}" value="1" {% if product.stoc <= 0 %}disabled{% endif %}>
     <button type="submit" {% if product.stoc <= 0 %}disabled{% endif %}>Add to cart</button>

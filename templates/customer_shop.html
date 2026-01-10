@@ -58,7 +58,7 @@
 
 {% set header_title = "Petshop Store" %}
 {% set show_search = true %}
-{% set search_action = "/customer-shop/search" %}
+{% set search_action = "/shop/search" %}
 {% set search_query = "" %}
 {% include "_customer_shop_header.html" %}
 
@@ -77,7 +77,7 @@
         <span>${{ "{:,.2f}".format(product.pret) }}</span>
         <span>Stock: {{ product.stoc }}</span>
       </div>
-      <form method="post" action="/customer-cart/add">
+      <form method="post" action="/cart/add">
         <input type="hidden" name="product_id" value="{{ product.id }}">
         <button type="submit" {% if product.stoc <= 0 %}disabled{% endif %}>Add to cart</button>
       </form>

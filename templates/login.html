@@ -16,12 +16,14 @@
 
         <form action="{{ url_for('login') }}" method="post">
             <div>{{ msg }}</div>
+            <input type="hidden" name="next" value="{{ next or '' }}">
 
             <input class="textbox" type="text" name="username" placeholder="Enter Username" required>
             <input class="textbox" type="password" name="password" placeholder="Enter Password" required>
 
             <button class="btn" type="submit">Login</button>
         </form>
+        <a class="btn" href="/register">Not a customer? Register</a>
     </div>
 
 
