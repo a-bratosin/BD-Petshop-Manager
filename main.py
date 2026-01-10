@@ -7,7 +7,7 @@ import hashlib
 import base64
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 # FORMAT: UID is the user, PWD is the password
 load_dotenv()
 conn = connect(getenv("SQL_CONNECTION_STRING"))
@@ -222,6 +222,211 @@ def employee_dashboard():
         flash("Unauthorized: This action requires employee privileges.")
         return redirect(url_for('login'))
     return render_template('employee_dashboard.html')
+
+
+@app.route('/revenues-expenses', methods=['GET', 'POST'])
+def revenues_expenses():
+    if not session.get('loggedin') or session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    start_date_str = request.values.get('start_date', '').strip()
+    end_date_str = request.values.get('end_date', '').strip()
+
+    totals = None
+    if start_date_str and end_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
+            if end_date < start_date:
+                flash("End date must be on or after start date.")
+            else:
+                end_date = end_date + timedelta(days=1) - timedelta(seconds=1)
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT SUM(
+                        (
+                            SELECT SUM(pc.ProdusComandaCantitate * p.Pret)
+                            FROM dbo.ProdusComanda pc
+                            JOIN dbo.Produs p ON p.ProdusId = pc.ProdusId
+                            WHERE pc.ComandaId = c.ComandaId
+                        )
+                    ) AS TotalRevenue
+                    FROM dbo.Comanda c
+                    WHERE c.ComandaData >= ? AND c.ComandaData <= ?
+                    """,
+                    (start_date, end_date)
+                )
+                revenue_row = cursor.fetchone()
+                revenue = float(revenue_row[0]) if revenue_row and revenue_row[0] is not None else 0.0
+
+                cursor.execute(
+                    """
+                    SELECT SUM(
+                        (
+                            SELECT SUM(pl.ProdusLivrareCantitate * p.Cost)
+                            FROM dbo.ProdusLivrare pl
+                            JOIN dbo.Produs p ON p.ProdusId = pl.ProdusId
+                            WHERE pl.LivrareId = l.LivrareId
+                        )
+                    ) AS TotalExpense
+                    FROM dbo.Livrare l
+                    WHERE l.DataLivrare >= ? AND l.DataLivrare <= ?
+                    """,
+                    (start_date, end_date)
+                )
+                expense_row = cursor.fetchone()
+                expense = float(expense_row[0]) if expense_row and expense_row[0] is not None else 0.0
+
+                totals = {
+                    "revenue": revenue,
+                    "expenses": -expense,
+                    "net": revenue - expense,
+                }
+        except ValueError:
+            flash("Invalid date format.")
+    elif start_date_str or end_date_str:
+        flash("Please select both start and end dates.")
+
+    return render_template(
+        'revenues_expenses.html',
+        totals=totals,
+        start_date=start_date_str,
+        end_date=end_date_str
+    )
+
+
+
+@app.route('/analytics')
+def analytics():
+    if not session.get('loggedin') or session.get('role') != 'employee':
+        flash("Unauthorized: This action requires employee privileges.")
+        return redirect(url_for('login'))
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT TOP 1
+            cl.ClientId,
+            cl.ClientNume,
+            cl.ClientPrenume,
+            u.Username,
+            COUNT(*) AS OrderCount
+        FROM dbo.Comanda c
+        JOIN dbo.Client cl ON cl.ClientId = c.ClientId
+        JOIN dbo.Utilizatori u ON u.UserId = cl.UserId
+        GROUP BY cl.ClientId, cl.ClientNume, cl.ClientPrenume, u.Username
+        ORDER BY COUNT(*) DESC, cl.ClientId
+        """
+    )
+    row = cursor.fetchone()
+    prolific_by_orders = None
+    if row:
+        prolific_by_orders = {
+            "name": f"{row.ClientNume} {row.ClientPrenume}",
+            "email": row.Username,
+            "count": int(row.OrderCount),
+        }
+
+    cursor.execute(
+        """
+        SELECT TOP 1
+            cl.ClientId,
+            cl.ClientNume,
+            cl.ClientPrenume,
+            u.Username,
+            SUM(pc.ProdusComandaCantitate * p.Pret) AS TotalSpent
+        FROM dbo.Comanda c
+        JOIN dbo.ProdusComanda pc ON pc.ComandaId = c.ComandaId
+        JOIN dbo.Produs p ON p.ProdusId = pc.ProdusId
+        JOIN dbo.Client cl ON cl.ClientId = c.ClientId
+        JOIN dbo.Utilizatori u ON u.UserId = cl.UserId
+        GROUP BY cl.ClientId, cl.ClientNume, cl.ClientPrenume, u.Username
+        ORDER BY SUM(pc.ProdusComandaCantitate * p.Pret) DESC, cl.ClientId
+        """
+    )
+    row = cursor.fetchone()
+    prolific_by_spend = None
+    if row:
+        prolific_by_spend = {
+            "name": f"{row.ClientNume} {row.ClientPrenume}",
+            "email": row.Username,
+            "total": float(row.TotalSpent) if row.TotalSpent is not None else 0.0,
+        }
+
+    cursor.execute(
+        """
+        SELECT TOP 1
+            d.DistribuitorId,
+            d.DistribuitorNume,
+            COUNT(l.LivrareId) AS DeliveryCount
+        FROM dbo.Distribuitor d
+        LEFT JOIN dbo.Livrare l ON l.DistribuitorId = d.DistribuitorId
+        GROUP BY d.DistribuitorId, d.DistribuitorNume
+        ORDER BY COUNT(l.LivrareId) DESC, d.DistribuitorId
+        """
+    )
+    row = cursor.fetchone()
+    prolific_distributor = None
+    if row:
+        prolific_distributor = {
+            "name": row.DistribuitorNume,
+            "count": int(row.DeliveryCount),
+        }
+
+    cursor.execute(
+        """
+        SELECT TOP 1
+            d.DistribuitorId,
+            d.DistribuitorNume,
+            SUM(pl.ProdusLivrareCantitate) AS QuantityTotal
+        FROM dbo.Distribuitor d
+        LEFT JOIN dbo.Livrare l ON l.DistribuitorId = d.DistribuitorId
+        LEFT JOIN dbo.ProdusLivrare pl ON pl.LivrareId = l.LivrareId
+        GROUP BY d.DistribuitorId, d.DistribuitorNume
+        ORDER BY SUM(pl.ProdusLivrareCantitate) DESC, d.DistribuitorId
+        """
+    )
+    row = cursor.fetchone()
+    prolific_distributor_qty = None
+    if row and row.QuantityTotal is not None:
+        prolific_distributor_qty = {
+            "name": row.DistribuitorNume,
+            "quantity": int(row.QuantityTotal),
+        }
+
+    cursor.execute(
+        """
+        SELECT TOP 5
+            p.ProdusId,
+            p.Descriere,
+            SUM(pc.ProdusComandaCantitate * p.Pret) AS Revenue
+        FROM dbo.Produs p
+        JOIN dbo.ProdusComanda pc ON pc.ProdusId = p.ProdusId
+        GROUP BY p.ProdusId, p.Descriere
+        ORDER BY SUM(pc.ProdusComandaCantitate * p.Pret) DESC, p.ProdusId
+        """
+    )
+    rows = cursor.fetchall()
+    top_products = [
+        {
+            "id": row.ProdusId,
+            "name": row.Descriere,
+            "revenue": float(row.Revenue) if row.Revenue is not None else 0.0,
+        }
+        for row in rows
+    ]
+
+    return render_template(
+        'analytics.html',
+        prolific_by_orders=prolific_by_orders,
+        prolific_by_spend=prolific_by_spend,
+        prolific_distributor=prolific_distributor,
+        prolific_distributor_qty=prolific_distributor_qty,
+        top_products=top_products
+    )
 
 @app.route('/customer-dashboard')
 def customer_dashboard():
@@ -1017,7 +1222,7 @@ def customer_details():
     first_order_row = cursor.fetchone()
     first_order_date = first_order_row[0] if first_order_row else None
 
-    from datetime import datetime
+    from datetime import datetime, timedelta
     now = datetime.now()
 
     dates = [d for d in [card_start, first_order_date] if d]
@@ -1346,7 +1551,7 @@ def create_customer():
 
             # Check if Card de fidelitate is requested
             if request.form.get('CardFidelitate'):
-                from datetime import datetime
+                from datetime import datetime, timedelta
                 now = datetime.now()
                 cursor.execute("""
                     INSERT INTO dbo.CardFidelitate (ClientId, DataInregistrarii)
@@ -1468,7 +1673,7 @@ def create_order():
                     return redirect(request.url)
 
             # Create order and order items
-            from datetime import datetime
+            from datetime import datetime, timedelta
             now = datetime.now()
 
             cursor.execute(
@@ -1620,7 +1825,7 @@ def create_delivery():
                 flash("Some products no longer exist. Please reselect the items.")
                 return redirect(request.url)
 
-            from datetime import datetime
+            from datetime import datetime, timedelta
             now = datetime.now()
 
             cursor.execute(
@@ -1928,7 +2133,7 @@ def loyalty_discount():
     if not row or not row[0]:
         return jsonify({"discount_pct": 0})
 
-    from datetime import datetime
+    from datetime import datetime, timedelta
 
     now = datetime.now()
     years_active = (now - row[0]).days / 365.25

@@ -10,13 +10,12 @@
     overflow-x: auto;
     scroll-behavior: smooth;
     padding-bottom: 4px;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
   .shop-grid--carousel::-webkit-scrollbar {
-    height: 6px;
-  }
-  .shop-grid--carousel::-webkit-scrollbar-thumb {
-    background: #ccc;
-    border-radius: 999px;
+    display: none;
   }
   .shop-card {
     border: 1px solid #ddd;
@@ -26,6 +25,7 @@
     flex-direction: column;
     gap: 10px;
     min-width: 220px;
+    scroll-snap-align: start;
   }
   .shop-card img {
     width: 100%;
@@ -240,16 +240,17 @@
     const section = carousel.closest('.shop-section');
     const prev = section.querySelector('.carousel-btn.prev');
     const next = section.querySelector('.carousel-btn.next');
-    const totalItems = parseInt(carousel.dataset.items || '0', 10);
 
     const updateButtons = () => {
       const maxScroll = carousel.scrollWidth - carousel.clientWidth;
       const atStart = carousel.scrollLeft <= 1;
       const atEnd = carousel.scrollLeft >= maxScroll - 1;
+      const hasOverflow = maxScroll > 1;
+      const totalItems = carousel.querySelectorAll('.shop-card').length;
       const tooFew = totalItems < 12;
 
-      prev.disabled = tooFew || atStart;
-      next.disabled = tooFew || atEnd;
+      prev.disabled = tooFew || !hasOverflow || atStart;
+      next.disabled = tooFew || !hasOverflow || atEnd;
     };
 
     prev.addEventListener('click', () => {
@@ -265,6 +266,16 @@
     });
 
     window.addEventListener('resize', updateButtons);
-    updateButtons();
+
+    carousel.querySelectorAll('img').forEach((img) => {
+      if (img.complete) {
+        return;
+      }
+      img.addEventListener('load', updateButtons, { once: true });
+      img.addEventListener('error', updateButtons, { once: true });
+    });
+
+    window.requestAnimationFrame(updateButtons);
+    window.setTimeout(updateButtons, 0);
   });
 </script>

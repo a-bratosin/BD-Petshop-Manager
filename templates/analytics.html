@@ -1,0 +1,62 @@
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<h1>Analytics</h1>
+
+<h2>Most Prolific Customers</h2>
+<h3>By Number of Orders</h3>
+{% if prolific_by_orders %}
+  <p><strong>{{ prolific_by_orders.name }}</strong> ({{ prolific_by_orders.email }})</p>
+  <p>Orders: {{ prolific_by_orders.count }}</p>
+{% else %}
+  <p>No orders yet.</p>
+{% endif %}
+
+<h3>By Total Spend</h3>
+{% if prolific_by_spend %}
+  <p><strong>{{ prolific_by_spend.name }}</strong> ({{ prolific_by_spend.email }})</p>
+  <p>Total spent: {{ "{:,.2f} lei".format(prolific_by_spend.total) }}</p>
+{% else %}
+  <p>No order revenue yet.</p>
+{% endif %}
+
+<h2>Most Prolific Delivery Company</h2>
+{% if prolific_distributor %}
+  <p><strong>{{ prolific_distributor.name }}</strong></p>
+  <p>Deliveries: {{ prolific_distributor.count }}</p>
+{% else %}
+  <p>No deliveries yet.</p>
+{% endif %}
+
+<h3>By Delivered Quantity</h3>
+{% if prolific_distributor_qty %}
+  <p><strong>{{ prolific_distributor_qty.name }}</strong></p>
+  <p>Quantity: {{ prolific_distributor_qty.quantity }}</p>
+{% else %}
+  <p>No deliveries yet.</p>
+{% endif %}
+
+<h2>Top 5 Products by Revenue</h2>
+{% if top_products %}
+  <table>
+    <tr>
+      <th>Product</th>
+      <th>Revenue</th>
+    </tr>
+    {% for product in top_products %}
+    <tr>
+      <td>{{ product.name }}</td>
+      <td>{{ "{:,.2f} lei".format(product.revenue) }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+{% else %}
+  <p>No product revenue yet.</p>
+{% endif %}

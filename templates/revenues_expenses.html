@@ -1,0 +1,38 @@
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<h1>Revenues &amp; Expenses</h1>
+
+<form method="get" action="/revenues-expenses">
+  <label for="start_date">Start date</label>
+  <input type="date" id="start_date" name="start_date" value="{{ start_date }}" required>
+
+  <label for="end_date">End date</label>
+  <input type="date" id="end_date" name="end_date" value="{{ end_date }}" required>
+
+  <button type="submit">Calculate</button>
+</form>
+
+{% if totals %}
+  <table>
+    <tr>
+      <th>Revenues</th>
+      <td>{{ "{:,.2f} lei".format(totals.revenue) }}</td>
+    </tr>
+    <tr>
+      <th>Expenses</th>
+      <td>{{ "{:,.2f} lei".format(totals.expenses) }}</td>
+    </tr>
+    <tr>
+      <th>Net</th>
+      <td>{{ "{:,.2f} lei".format(totals.net) }}</td>
+    </tr>
+  </table>
+{% endif %}
