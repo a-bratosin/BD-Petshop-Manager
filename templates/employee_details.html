@@ -1,0 +1,32 @@
+{% include '_page_start.html' %}
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li><span>{{ message }}</span><button class="flash-close" type="button" aria-label="Close">&times;</button></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+{% include '_employee_header.html' %}
+
+<h1>Personal Details</h1>
+
+<p><strong>Name:</strong> {{ employee.name }}</p>
+<p><strong>CNP:</strong> {{ employee.cnp }}</p>
+<p><strong>Email:</strong> {{ employee.email }}</p>
+<p><strong>Phone:</strong> {{ employee.phone }}</p>
+<p><strong>Address:</strong> {{ employee.address }}</p>
+
+<h2>Employment</h2>
+<p><strong>Hourly rate:</strong> {{ "{:,.2f} lei".format(employee.hourly_rate) }}</p>
+<p><strong>Hours per week:</strong> {{ employee.hours_per_week }}</p>
+<p><strong>Date of birth:</strong> {{ employee.birth_date }}</p>
+<p><strong>Hire date:</strong> {{ employee.hire_date }}</p>
+
+<br>
+<a href="/employee-dashboard">Back to Dashboard</a>
+
+{% include '_page_end.html' %}

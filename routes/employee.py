@@ -15,6 +15,53 @@ def register(app):
             return redirect(url_for('login'))
         return render_template('employee_dashboard.html')
 
+    @app.route('/employee-details')
+    def employee_details():
+        if not session.get('loggedin') or session.get('role') != 'employee':
+            flash("Unauthorized: This action requires employee privileges.")
+            return redirect(url_for('login'))
+
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                AngajatNume,
+                AngajatPrenume,
+                CNP,
+                AngajatEmail,
+                AngajatTelefon,
+                AngajatStrada,
+                AngajatNumar,
+                AngajatOras,
+                AngajatJudet,
+                SalariuOra,
+                NrOreSaptamana,
+                DataNasterii,
+                DataAngajarii
+            FROM dbo.Angajat
+            WHERE UserId = ?
+            """,
+            (session.get('id'),)
+        )
+        row = cursor.fetchone()
+        if not row:
+            flash("Employee record not found.")
+            return redirect(url_for('employee_dashboard'))
+
+        employee = {
+            "name": f"{row.AngajatNume} {row.AngajatPrenume}",
+            "cnp": row.CNP,
+            "email": row.AngajatEmail,
+            "phone": row.AngajatTelefon,
+            "address": f"{row.AngajatStrada} {row.AngajatNumar}, {row.AngajatOras}, {row.AngajatJudet}",
+            "hourly_rate": float(row.SalariuOra) if row.SalariuOra is not None else 0.0,
+            "hours_per_week": int(row.NrOreSaptamana) if row.NrOreSaptamana is not None else 0,
+            "birth_date": row.DataNasterii,
+            "hire_date": row.DataAngajarii,
+        }
+
+        return render_template('employee_details.html', employee=employee)
+
     # rută pentru vizualizarea veniturilor și cheltuielilor într-un interval calendaristic introdus din formular
     @app.route('/revenues-expenses', methods=['GET', 'POST'])
     def revenues_expenses():
