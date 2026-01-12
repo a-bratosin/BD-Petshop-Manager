@@ -107,8 +107,12 @@ def register(app):
 
         customer_range_key = request.args.get('customer_range', 'all')
         delivery_range_key = request.args.get('delivery_range', 'all')
+        low_turnover_range_key = request.args.get('low_turnover_range', 'all')
         current_customer_range, customer_range_label, customer_start, customer_end = resolve_range(customer_range_key)
         current_delivery_range, delivery_range_label, delivery_start, delivery_end = resolve_range(delivery_range_key)
+        current_low_turnover_range, low_turnover_range_label, low_turnover_start, low_turnover_end = resolve_range(
+            low_turnover_range_key
+        )
 
         orders_filter = ""
         orders_params = ()
@@ -242,6 +246,42 @@ def register(app):
             for row in rows
         ]
 
+        turnover_filter = ""
+        turnover_params = ()
+        if low_turnover_start is not None and low_turnover_end is not None:
+            turnover_filter = "WHERE c.ComandaData >= ? AND c.ComandaData <= ?"
+            turnover_params = (low_turnover_start, low_turnover_end)
+
+        cursor.execute(
+            f"""
+            SELECT TOP 5
+                p.ProdusId,
+                p.Descriere,
+                COALESCE(sales.TotalSold, 0) AS TotalSold
+            FROM dbo.Produs p
+            LEFT JOIN (
+                SELECT
+                    pc.ProdusId,
+                    SUM(pc.ProdusComandaCantitate) AS TotalSold
+                FROM dbo.Comanda c
+                JOIN dbo.ProdusComanda pc ON pc.ComandaId = c.ComandaId
+                {turnover_filter}
+                GROUP BY pc.ProdusId
+            ) sales ON sales.ProdusId = p.ProdusId
+            ORDER BY COALESCE(sales.TotalSold, 0) ASC, p.Descriere
+            """,
+            turnover_params
+        )
+        rows = cursor.fetchall()
+        low_turnover_products = [
+            {
+                "id": row.ProdusId,
+                "name": row.Descriere,
+                "total_sold": int(row.TotalSold) if row.TotalSold is not None else 0,
+            }
+            for row in rows
+        ]
+
         return render_template(
             'analytics.html',
             prolific_by_orders=prolific_by_orders,
@@ -249,8 +289,11 @@ def register(app):
             prolific_distributor=prolific_distributor,
             prolific_distributor_qty=prolific_distributor_qty,
             top_products=top_products,
+            low_turnover_products=low_turnover_products,
             current_customer_range=current_customer_range,
             customer_range_label=customer_range_label,
             current_delivery_range=current_delivery_range,
-            delivery_range_label=delivery_range_label
+            delivery_range_label=delivery_range_label,
+            current_low_turnover_range=current_low_turnover_range,
+            low_turnover_range_label=low_turnover_range_label
         )

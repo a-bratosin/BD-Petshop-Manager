@@ -75,6 +75,29 @@
   <p>No product revenue yet.</p>
 {% endif %}
 
+<h2>Low Turnover Products ({{ low_turnover_range_label }})</h2>
+<div class="range-toggle mb-3" role="group" aria-label="Low turnover analytics range">
+  <a class="btn btn-outline-primary {% if current_low_turnover_range == 'month' %}active{% endif %}" href="{{ url_for('analytics', customer_range=current_customer_range, delivery_range=current_delivery_range, low_turnover_range='month') }}">Past Month</a>
+  <a class="btn btn-outline-primary {% if current_low_turnover_range == '6months' %}active{% endif %}" href="{{ url_for('analytics', customer_range=current_customer_range, delivery_range=current_delivery_range, low_turnover_range='6months') }}">Past 6 Months</a>
+  <a class="btn btn-outline-primary {% if current_low_turnover_range == 'all' %}active{% endif %}" href="{{ url_for('analytics', customer_range=current_customer_range, delivery_range=current_delivery_range, low_turnover_range='all') }}">All Time</a>
+</div>
+{% if low_turnover_products %}
+  <table class="table table-striped table-hover">
+    <tr>
+      <th>Product</th>
+      <th>Total Sold</th>
+    </tr>
+    {% for product in low_turnover_products %}
+    <tr>
+      <td>{{ product.name }}</td>
+      <td>{{ product.total_sold }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+{% else %}
+  <p>No product sales data yet.</p>
+{% endif %}
+
 {% include '_page_end.html' %}
 
 
