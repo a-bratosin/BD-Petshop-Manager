@@ -173,6 +173,156 @@ def register(app):
 
         return render_template('delivery_history.html', deliveries=deliveries)
 
+    @app.route('/view-distributors')
+    def view_distributors():
+        if not session.get('loggedin') or session.get('role') != 'employee':
+            flash("Unauthorized: This action requires employee privileges.")
+            return redirect(url_for('login'))
+
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT *
+            FROM dbo.Distribuitor
+            ORDER BY DistribuitorNume
+            """
+        )
+        rows = cursor.fetchall()
+        columns = [col[0] for col in cursor.description]
+        distributors = []
+        for row in rows:
+            data = dict(zip(columns, row))
+            street = (data.get('DistribuitorStrada') or '').strip()
+            number_raw = data.get('DistribuitorNumar')
+            number = str(number_raw).strip() if number_raw is not None else ''
+            address = " ".join(part for part in [street, number] if part).strip() or "N/A"
+
+            distributors.append({
+                "id": data.get('DistribuitorId'),
+                "name": (data.get('DistribuitorNume') or "").strip(),
+                "phone": str(data.get('DistribuitorTelefon') or "").strip(),
+                "email": (data.get('DistribuitorEmail') or "").strip(),
+                "city": (data.get('DistribuitorOras') or "").strip(),
+                "county": (data.get('DistribuitorJudet') or "").strip(),
+                "address": address,
+            })
+
+        return render_template('view_distributors.html', distributors=distributors)
+
+    @app.route('/create-distributor', methods=['GET', 'POST'])
+    def create_distributor():
+        if not session.get('loggedin') or session.get('role') != 'employee':
+            flash("Unauthorized: This action requires employee privileges.")
+            return redirect(url_for('login'))
+
+        if request.method == 'POST':
+            name = request.form.get('DistribuitorNume', '').strip()
+            phone = request.form.get('DistribuitorTelefon', '').strip() or None
+            email = request.form.get('DistribuitorEmail', '').strip() or None
+            street = request.form.get('DistribuitorStrada', '').strip() or None
+            number = request.form.get('DistribuitorNumar', '').strip() or None
+            city = request.form.get('DistribuitorOras', '').strip() or None
+            county = request.form.get('DistribuitorJudet', '').strip() or None
+            if not name:
+                flash("Company name is required.")
+                return redirect(request.url)
+
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT 1 FROM dbo.Distribuitor WHERE DistribuitorNume = ?",
+                (name,)
+            )
+            if cursor.fetchone():
+                flash("A company with this name already exists.")
+                return redirect(request.url)
+
+            try:
+                cursor.execute(
+                    """
+                    INSERT INTO dbo.Distribuitor (
+                        DistribuitorNume,
+                        DistribuitorTelefon,
+                        DistribuitorEmail,
+                        DistribuitorStrada,
+                        DistribuitorNumar,
+                        DistribuitorOras,
+                        DistribuitorJudet
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (name, phone, email, street, number, city, county)
+                )
+                conn.commit()
+                flash("Delivery company added successfully!")
+                return redirect(url_for('view_distributors'))
+            except Exception as e:
+                conn.rollback()
+                flash(f"An error occurred: {str(e)}")
+                return redirect(request.url)
+
+        return render_template('create_distributor.html')
+
+    @app.route('/edit-distributor/<int:distributor_id>', methods=['GET', 'POST'])
+    def edit_distributor(distributor_id):
+        if not session.get('loggedin') or session.get('role') != 'employee':
+            flash("Unauthorized: This action requires employee privileges.")
+            return redirect(url_for('login'))
+
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT *
+            FROM dbo.Distribuitor
+            WHERE DistribuitorId = ?
+            """,
+            (distributor_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            flash("Delivery company not found.")
+            return redirect(url_for('view_distributors'))
+
+        columns = [col[0] for col in cursor.description]
+        distributor = dict(zip(columns, row))
+
+        if request.method == 'POST':
+            name = request.form.get('DistribuitorNume', '').strip()
+            phone = request.form.get('DistribuitorTelefon', '').strip() or None
+            email = request.form.get('DistribuitorEmail', '').strip() or None
+            street = request.form.get('DistribuitorStrada', '').strip() or None
+            number = request.form.get('DistribuitorNumar', '').strip() or None
+            city = request.form.get('DistribuitorOras', '').strip() or None
+            county = request.form.get('DistribuitorJudet', '').strip() or None
+
+            if not name:
+                flash("Company name is required.")
+                return redirect(request.url)
+
+            try:
+                cursor.execute(
+                    """
+                    UPDATE dbo.Distribuitor
+                    SET DistribuitorNume = ?,
+                        DistribuitorTelefon = ?,
+                        DistribuitorEmail = ?,
+                        DistribuitorStrada = ?,
+                        DistribuitorNumar = ?,
+                        DistribuitorOras = ?,
+                        DistribuitorJudet = ?
+                    WHERE DistribuitorId = ?
+                    """,
+                    (name, phone, email, street, number, city, county, distributor_id)
+                )
+                conn.commit()
+                flash("Delivery company updated successfully!")
+                return redirect(url_for('view_distributors'))
+            except Exception as e:
+                conn.rollback()
+                flash(f"An error occurred: {str(e)}")
+                return redirect(request.url)
+
+        return render_template('edit_distributor.html', distributor=distributor)
+
     @app.route('/delivery-details/<int:delivery_id>')
     def delivery_details(delivery_id):
         if not session.get('loggedin') or session.get('role') != 'employee':

@@ -34,15 +34,10 @@ def register(app):
                     cursor = conn.cursor()
                     cursor.execute(
                         """
-                        SELECT SUM(
-                            (
-                                SELECT SUM(pc.ProdusComandaCantitate * p.Pret)
-                                FROM dbo.ProdusComanda pc
-                                JOIN dbo.Produs p ON p.ProdusId = pc.ProdusId
-                                WHERE pc.ComandaId = c.ComandaId
-                            )
-                        ) AS TotalRevenue
+                        SELECT SUM(pc.ProdusComandaCantitate * p.Pret) AS TotalRevenue
                         FROM dbo.Comanda c
+                        JOIN dbo.ProdusComanda pc ON pc.ComandaId = c.ComandaId
+                        JOIN dbo.Produs p ON p.ProdusId = pc.ProdusId
                         WHERE c.ComandaData >= ? AND c.ComandaData <= ?
                         """,
                         (start_date, end_date)
@@ -52,15 +47,10 @@ def register(app):
 
                     cursor.execute(
                         """
-                        SELECT SUM(
-                            (
-                                SELECT SUM(pl.ProdusLivrareCantitate * p.Cost)
-                                FROM dbo.ProdusLivrare pl
-                                JOIN dbo.Produs p ON p.ProdusId = pl.ProdusId
-                                WHERE pl.LivrareId = l.LivrareId
-                            )
-                        ) AS TotalExpense
+                        SELECT SUM(pl.ProdusLivrareCantitate * p.Cost) AS TotalExpense
                         FROM dbo.Livrare l
+                        JOIN dbo.ProdusLivrare pl ON pl.LivrareId = l.LivrareId
+                        JOIN dbo.Produs p ON p.ProdusId = pl.ProdusId
                         WHERE l.DataLivrare >= ? AND l.DataLivrare <= ?
                         """,
                         (start_date, end_date)
