@@ -1,6 +1,11 @@
 import uuid
 from os import getenv
 
+
+# utilizatori de testare
+# angajat: test@test.test / test
+# client: a@b.c / 1234
+
 from dotenv import load_dotenv
 from flask import Flask, session
 from pyodbc import connect

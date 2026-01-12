@@ -521,7 +521,490 @@ SELECT 1 FROM dbo.Livrare WHERE LivrareId = ?", (delivery_id,)
 ~~~
 "DELETE FROM dbo.ProdusLivrare WHERE LivrareId = ?", (delivery_id,)
 ~~~
-1)  Eliminarea unei intrări Livrare în funcție de ID (interogare simplă cu DELETE)
+51)  Eliminarea unei intrări Livrare în funcție de ID (interogare simplă cu DELETE)
 ~~~
 "DELETE FROM dbo.Livrare WHERE LivrareId = ?", (delivery_id,)
+~~~
+
+
+### D) employee.py
+
+52) Obtinerea datelor angajatului curent dupa UserId (interogare simpla cu SELECT):
+~~~
+"""
+SELECT
+    AngajatNume,
+    AngajatPrenume,
+    CNP,
+    AngajatEmail,
+    AngajatTelefon,
+    AngajatStrada,
+    AngajatNumar,
+    AngajatOras,
+    AngajatJudet,
+    SalariuOra,
+    NrOreSaptamana,
+    DataNasterii,
+    DataAngajarii
+FROM dbo.Angajat
+WHERE UserId = ?
+""",
+(session.get('id'),)
+~~~
+
+53) Calcularea veniturilor totale in interval (interogare complexa cu JOIN + functie agregat):
+~~~
+"""
+SELECT SUM(pc.ProdusComandaCantitate * p.Pret) AS TotalRevenue
+FROM dbo.Comanda c
+JOIN dbo.ProdusComanda pc ON pc.ComandaId = c.ComandaId
+JOIN dbo.Produs p ON p.ProdusId = pc.ProdusId
+WHERE c.ComandaData >= ? AND c.ComandaData <= ?
+""",
+(start_date, end_date)
+~~~
+
+54) Calcularea cheltuielilor totale in interval (interogare complexa cu JOIN + functie agregat):
+~~~
+"""
+SELECT SUM(pl.ProdusLivrareCantitate * p.Cost) AS TotalExpense
+FROM dbo.Livrare l
+JOIN dbo.ProdusLivrare pl ON pl.LivrareId = l.LivrareId
+JOIN dbo.Produs p ON p.ProdusId = pl.ProdusId
+WHERE l.DataLivrare >= ? AND l.DataLivrare <= ?
+""",
+(start_date, end_date)
+~~~
+
+55) Clientul cu cele mai multe comenzi intr-un interval (interogare complexa cu JOIN + GROUP BY):
+~~~
+f"""
+SELECT TOP 1
+    cl.ClientId,
+    cl.ClientNume,
+    cl.ClientPrenume,
+    u.Username,
+    COUNT(*) AS OrderCount
+FROM dbo.Comanda c
+JOIN dbo.Client cl ON cl.ClientId = c.ClientId
+JOIN dbo.Utilizatori u ON u.UserId = cl.UserId
+{orders_filter}
+GROUP BY cl.ClientId, cl.ClientNume, cl.ClientPrenume, u.Username
+ORDER BY COUNT(*) DESC, cl.ClientId
+""",
+orders_params
+~~~
+
+56) Clientul cu cele mai mari cheltuieli intr-un interval (interogare complexa cu JOIN + functie agregat):
+~~~
+f"""
+SELECT TOP 1
+    cl.ClientId,
+    cl.ClientNume,
+    cl.ClientPrenume,
+    u.Username,
+    SUM(pc.ProdusComandaCantitate * p.Pret) AS TotalSpent
+FROM dbo.Comanda c
+JOIN dbo.ProdusComanda pc ON pc.ComandaId = c.ComandaId
+JOIN dbo.Produs p ON p.ProdusId = pc.ProdusId
+JOIN dbo.Client cl ON cl.ClientId = c.ClientId
+JOIN dbo.Utilizatori u ON u.UserId = cl.UserId
+{orders_filter}
+GROUP BY cl.ClientId, cl.ClientNume, cl.ClientPrenume, u.Username
+ORDER BY SUM(pc.ProdusComandaCantitate * p.Pret) DESC, cl.ClientId
+""",
+orders_params
+~~~
+
+57) Distribuitorul cu cele mai multe livrari intr-un interval (interogare complexa cu LEFT JOIN + GROUP BY):
+~~~
+f"""
+SELECT TOP 1
+    d.DistribuitorId,
+    d.DistribuitorNume,
+    COUNT(l.LivrareId) AS DeliveryCount
+FROM dbo.Distribuitor d
+LEFT JOIN dbo.Livrare l ON l.DistribuitorId = d.DistribuitorId
+{"AND l.DataLivrare >= ? AND l.DataLivrare <= ?" if delivery_start is not None and delivery_end is not None else ""}
+GROUP BY d.DistribuitorId, d.DistribuitorNume
+ORDER BY COUNT(l.LivrareId) DESC, d.DistribuitorId
+""",
+(delivery_start, delivery_end) if delivery_start is not None and delivery_end is not None else ()
+~~~
+
+58) Distribuitorul cu cele mai multe produse livrate intr-un interval (interogare complexa cu LEFT JOIN + functie agregat):
+~~~
+f"""
+SELECT TOP 1
+    d.DistribuitorId,
+    d.DistribuitorNume,
+    SUM(pl.ProdusLivrareCantitate) AS QuantityTotal
+FROM dbo.Distribuitor d
+LEFT JOIN dbo.Livrare l ON l.DistribuitorId = d.DistribuitorId
+{"AND l.DataLivrare >= ? AND l.DataLivrare <= ?" if delivery_start is not None and delivery_end is not None else ""}
+LEFT JOIN dbo.ProdusLivrare pl ON pl.LivrareId = l.LivrareId
+GROUP BY d.DistribuitorId, d.DistribuitorNume
+ORDER BY SUM(pl.ProdusLivrareCantitate) DESC, d.DistribuitorId
+""",
+(delivery_start, delivery_end) if delivery_start is not None and delivery_end is not None else ()
+~~~
+
+59) Top 5 produse dupa venituri intr-un interval (interogare complexa cu JOIN + functie agregat):
+~~~
+f"""
+SELECT TOP 5
+    p.ProdusId,
+    p.Descriere,
+    SUM(pc.ProdusComandaCantitate * p.Pret) AS Revenue
+FROM dbo.Produs p
+JOIN dbo.ProdusComanda pc ON pc.ProdusId = p.ProdusId
+JOIN dbo.Comanda c ON c.ComandaId = pc.ComandaId
+{top_products_filter}
+GROUP BY p.ProdusId, p.Descriere
+ORDER BY SUM(pc.ProdusComandaCantitate * p.Pret) DESC, p.ProdusId
+""",
+top_products_params
+~~~
+
+60) Top 5 produse cu vanzari scazute intr-un interval (interogare complexa cu subcerere + LEFT JOIN):
+~~~
+f"""
+SELECT TOP 5
+    p.ProdusId,
+    p.Descriere,
+    COALESCE(sales.TotalSold, 0) AS TotalSold
+FROM dbo.Produs p
+LEFT JOIN (
+    SELECT
+        pc.ProdusId,
+        SUM(pc.ProdusComandaCantitate) AS TotalSold
+    FROM dbo.Comanda c
+    JOIN dbo.ProdusComanda pc ON pc.ComandaId = c.ComandaId
+    {turnover_filter}
+    GROUP BY pc.ProdusId
+) sales ON sales.ProdusId = p.ProdusId
+ORDER BY COALESCE(sales.TotalSold, 0) ASC, p.Descriere
+""",
+turnover_params
+~~~
+
+
+### E) orders.py
+
+61) Selectarea produselor disponibile pentru formular (interogare simpla cu SELECT):
+~~~
+SELECT ProdusId, Descriere, Pret, Stoc FROM dbo.Produs
+~~~
+
+62) Obtinerea ClientId-ului dupa email (interogare simpla cu JOIN):
+~~~
+"""
+SELECT c.ClientId
+FROM dbo.Client c
+JOIN dbo.Utilizatori u ON u.UserId = c.UserId
+WHERE u.Username = ?
+""",
+(email,)
+~~~
+
+63) Obtinerea AngajatId-ului dupa UserId (interogare simpla cu SELECT):
+~~~
+"SELECT AngajatId FROM dbo.Angajat WHERE UserId = ?",
+(session.get('id'),)
+~~~
+
+64) Selectarea produselor dupa descriere pentru validare stoc (interogare simpla cu SELECT):
+~~~
+f"""
+SELECT ProdusId, Descriere, Stoc
+FROM dbo.Produs
+WHERE Descriere IN ({placeholders})
+""",
+tuple(requested.keys())
+~~~
+
+65) Selectarea datei cardului de fidelitate dupa ClientId (interogare simpla cu SELECT):
+~~~
+"""
+SELECT DataInregistrarii
+FROM dbo.CardFidelitate
+WHERE ClientId = ?
+""",
+(client_id,)
+~~~
+
+66) Inserarea comenzii (interogare simpla cu INSERT):
+~~~
+"""
+INSERT INTO dbo.Comanda (ComandaData, ClientId, AngajatId, ReducereLoialitate)
+OUTPUT INSERTED.ComandaId
+VALUES (?, ?, ?, ?)
+""",
+(now, client_id, angajat_id, discount_pct)
+~~~
+
+67) Inserarea produselor in comanda (interogare simpla cu INSERT):
+~~~
+"""
+INSERT INTO dbo.ProdusComanda (ProdusId, ComandaId, ProdusComandaCantitate)
+VALUES (?, ?, ?)
+""",
+(produs_id, comanda_id, qty)
+~~~
+
+68) Actualizarea stocului dupa comanda (interogare simpla cu UPDATE):
+~~~
+"UPDATE dbo.Produs SET Stoc = ? WHERE ProdusId = ?",
+(stock - qty, produs_id)
+~~~
+
+69) Istoricul comenzilor cu totalul pe comanda (interogare complexa cu JOIN + functie agregat):
+~~~
+"""
+SELECT
+    c.ComandaId,
+    cl.ClientNume,
+    cl.ClientPrenume,
+    u.Username,
+    SUM(pc.ProdusComandaCantitate * p.Pret) AS TotalPret
+FROM dbo.Comanda c
+JOIN dbo.Client cl ON cl.ClientId = c.ClientId
+JOIN dbo.Utilizatori u ON u.UserId = cl.UserId
+LEFT JOIN dbo.ProdusComanda pc ON pc.ComandaId = c.ComandaId
+LEFT JOIN dbo.Produs p ON p.ProdusId = pc.ProdusId
+GROUP BY c.ComandaId, cl.ClientNume, cl.ClientPrenume, u.Username
+ORDER BY c.ComandaId DESC
+"""
+~~~
+
+70) Detaliile unei comenzi (interogare simpla cu JOIN):
+~~~
+"""
+SELECT
+    c.ComandaId,
+    c.ComandaData,
+    c.ReducereLoialitate,
+    cl.ClientNume,
+    cl.ClientPrenume,
+    u.Username
+FROM dbo.Comanda c
+JOIN dbo.Client cl ON cl.ClientId = c.ClientId
+JOIN dbo.Utilizatori u ON u.UserId = cl.UserId
+WHERE c.ComandaId = ?
+""",
+(order_id,)
+~~~
+
+71) Produsele dintr-o comanda (interogare simpla cu JOIN):
+~~~
+"""
+SELECT
+    p.Descriere,
+    pc.ProdusComandaCantitate,
+    p.Pret
+FROM dbo.ProdusComanda pc
+JOIN dbo.Produs p ON p.ProdusId = pc.ProdusId
+WHERE pc.ComandaId = ?
+ORDER BY p.Descriere
+""",
+(order_id,)
+~~~
+
+72) Verificarea existentei comenzii dupa ID (interogare simpla cu SELECT):
+~~~
+"SELECT 1 FROM dbo.Comanda WHERE ComandaId = ?", (order_id,)
+~~~
+
+73) Stergerea produselor din comanda (interogare simpla cu DELETE):
+~~~
+"DELETE FROM dbo.ProdusComanda WHERE ComandaId = ?", (order_id,)
+~~~
+
+74) Stergerea comenzii (interogare simpla cu DELETE):
+~~~
+"DELETE FROM dbo.Comanda WHERE ComandaId = ?", (order_id,)
+~~~
+
+75) Calcularea reducerii de loialitate dupa email (interogare simpla cu JOIN):
+~~~
+"""
+SELECT cf.DataInregistrarii
+FROM dbo.CardFidelitate cf
+JOIN dbo.Client c ON c.ClientId = cf.ClientId
+JOIN dbo.Utilizatori u ON u.UserId = c.UserId
+WHERE u.Username = ?
+""",
+(email,)
+~~~
+
+
+### F) products.py
+
+76) Selectarea categoriilor disponibile (interogare simpla cu SELECT):
+~~~
+SELECT CategorieId, CategorieNume FROM dbo.Categorie
+~~~
+
+77) Selectarea subcategoriilor disponibile (interogare simpla cu SELECT):
+~~~
+SELECT SubcategorieId, SubcategorieNume, CategorieId FROM dbo.Subcategorie
+~~~
+
+78) Inserarea unui produs nou (interogare simpla cu INSERT):
+~~~
+"""
+INSERT INTO dbo.Produs (SubcategorieId, Imagine, Stoc, Pret, Descriere, Cost)
+VALUES (?, ?, ?, ?, ?, ?)
+"""
+~~~
+
+79) Inserarea unei subcategorii noi (interogare simpla cu INSERT):
+~~~
+"""
+INSERT INTO dbo.Subcategorie (SubcategorieNume, CategorieId, SubcategorieDescriere)
+VALUES (?, ?, ?)
+"""
+~~~
+
+80) Inserarea unei categorii noi (interogare simpla cu INSERT):
+~~~
+"""
+INSERT INTO dbo.Categorie (CategorieNume)
+VALUES (?)
+"""
+~~~
+
+81) Verificarea existentei clientului dupa telefon (interogare simpla cu SELECT):
+~~~
+"SELECT COUNT(*) FROM dbo.Client WHERE ClientTelefon = ?", (telefon,)
+~~~
+
+82) Verificarea existentei utilizatorului dupa email (interogare simpla cu SELECT):
+~~~
+"SELECT COUNT(*) FROM dbo.Utilizatori WHERE Username = ?", (email,)
+~~~
+
+83) Inserarea unui utilizator nou (interogare simpla cu INSERT):
+~~~
+"""
+INSERT INTO dbo.Utilizatori (Username, Password, UserCategory)
+OUTPUT INSERTED.UserId
+VALUES (?, ?, ?)
+"""
+~~~
+
+84) Inserarea clientului aferent (interogare simpla cu INSERT):
+~~~
+"""
+INSERT INTO dbo.Client (UserId, ClientNume, ClientPrenume, ClientTelefon, ClientStrada, ClientNumar, ClientOras, ClientJudet)
+OUTPUT INSERTED.ClientId
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+"""
+~~~
+
+85) Inserarea cardului de fidelitate (interogare simpla cu INSERT):
+~~~
+"""
+INSERT INTO dbo.CardFidelitate (ClientId, DataInregistrarii)
+VALUES (?, ?)
+"""
+~~~
+
+86) Selectarea produselor cu subcategorie si categorie (interogare complexa cu LEFT JOIN):
+~~~
+"""
+SELECT
+    p.ProdusId,
+    p.SubcategorieId,
+    p.Imagine,
+    p.Stoc,
+    p.Pret,
+    p.Cost,
+    p.Descriere,
+    s.SubcategorieNume,
+    c.CategorieNume
+FROM dbo.Produs p
+LEFT JOIN dbo.Subcategorie s ON s.SubcategorieId = p.SubcategorieId
+LEFT JOIN dbo.Categorie c ON c.CategorieId = s.CategorieId
+"""
+~~~
+
+87) Selectarea clientilor cu detalii si email (interogare complexa cu JOIN):
+~~~
+"""
+SELECT
+    c.ClientId,
+    c.ClientNume,
+    c.ClientPrenume,
+    c.ClientTelefon,
+    c.ClientStrada,
+    c.ClientNumar,
+    c.ClientOras,
+    c.ClientJudet,
+    u.Username
+FROM dbo.Client c
+JOIN dbo.Utilizatori u ON u.UserId = c.UserId
+ORDER BY c.ClientNume, c.ClientPrenume
+"""
+~~~
+
+88) Selectarea produsului dupa ID pentru editare (interogare simpla cu SELECT):
+~~~
+"""
+SELECT ProdusId, Imagine, Stoc, Descriere
+FROM dbo.Produs
+WHERE ProdusId = ?
+""",
+(product_id,)
+~~~
+
+89) Actualizarea produsului cu imagine (interogare simpla cu UPDATE):
+~~~
+"""
+UPDATE dbo.Produs
+SET Imagine = ?, Stoc = ?, Descriere = ?
+WHERE ProdusId = ?
+""",
+(Binary(image_binary) if image_binary else None, stoc, descriere, product_id)
+~~~
+
+90) Actualizarea produsului fara imagine (interogare simpla cu UPDATE):
+~~~
+"""
+UPDATE dbo.Produs
+SET Stoc = ?, Descriere = ?
+WHERE ProdusId = ?
+""",
+(stoc, descriere, product_id)
+~~~
+
+
+### G) catalog.py
+
+91) Selectarea categoriilor in ordine alfabetica (interogare simpla cu SELECT):
+~~~
+"""
+SELECT CategorieId, CategorieNume
+FROM dbo.Categorie
+ORDER BY CategorieNume
+"""
+~~~
+
+92) Selectarea subcategoriilor in ordine alfabetica (interogare simpla cu SELECT):
+~~~
+"""
+SELECT SubcategorieId, SubcategorieNume, CategorieId
+FROM dbo.Subcategorie
+ORDER BY SubcategorieNume
+"""
+~~~
+
+93) Selectarea descrierilor produselor (interogare simpla cu SELECT):
+~~~
+"""
+SELECT Descriere
+FROM dbo.Produs
+WHERE Descriere IS NOT NULL
+ORDER BY Descriere
+"""
 ~~~
