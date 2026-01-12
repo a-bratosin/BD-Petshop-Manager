@@ -4,6 +4,7 @@ from datetime import datetime
 
 from flask import render_template, request, redirect, url_for, session, flash
 
+# în acest modul definesc rutele pentru autentificare și înregistrare
 
 def register(app):
     conn = app.config['DB_CONN']
@@ -13,6 +14,9 @@ def register(app):
         msg = ''
         next_path = request.args.get('next') or request.form.get('next') or ''
         if request.method == 'POST' and 'username' in request.form and 'password' in request.form:
+            # sunt preluate emailul și parola trimise prin formular
+            # parola este hash-uită, iar emailul și parola hash-uită sunt verificate în baza de date
+            # dacă există o potrivire, se creează sesiunea pentru utilizator și este atribuit rolul corespunzător (client sau angajat)
             username = request.form['username'].rstrip()
             password = request.form['password'].rstrip()
             password_hash = hashlib.sha256(password.encode()).hexdigest()
@@ -35,6 +39,7 @@ def register(app):
                 msg = 'Incorrect username/password!'
         return render_template('login.html', msg=msg, next=next_path)
 
+    # rută pentru înregistrarea unui nou client
     @app.route('/register', methods=['GET', 'POST'], endpoint='register')
     def register_user():
         if session.get('loggedin'):
@@ -43,6 +48,7 @@ def register(app):
             return redirect(url_for('employee_dashboard'))
 
         if request.method == 'POST':
+            # preiau toate câmpurile din formular și le curăț de spațiile albe de la sfârșit
             nume = request.form.get('Nume', '').rstrip()
             prenume = request.form.get('Prenume', '').rstrip()
             email = request.form.get('Email', '').rstrip()
@@ -61,6 +67,7 @@ def register(app):
                 flash("Passwords do not match.")
                 return redirect(request.url)
 
+            # verific validitatea datelor introduse (formatul telefonului și email-ului)
             if not re.fullmatch(r'\d{10}', telefon):
                 flash("Phone number must be exactly 10 digits.")
                 return redirect(request.url)
@@ -68,6 +75,8 @@ def register(app):
                 flash("Invalid email address format.")
                 return redirect(request.url)
 
+            # clientul este identificat prin nr de telefon și email; dacă aceste două elemente se regăsesc deja în baza de date,
+            # înseamnă că există deja un cont asociat și nu se poate crea unul nou
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM dbo.Client WHERE ClientTelefon = ?", (telefon,))
             exists = cursor.fetchone()[0]
@@ -82,6 +91,8 @@ def register(app):
                 return redirect(request.url)
 
             try:
+                # dacă datele introduse sunt valide, se inserează un nou utilizator în tabela Utilizatori și un nou client în tabela Client
+                # dacă utilizatorul a bifat opțiunea de a crea un card de fidelitate, se inserează și un nou card de fidelitate în tabela CardFidelitate
                 password_hash = hashlib.sha256(password.encode()).hexdigest()
                 cursor.execute("""
                     INSERT INTO dbo.Utilizatori (Username, Password, UserCategory)
@@ -119,6 +130,7 @@ def register(app):
 
         return render_template('register.html')
 
+    # la ruta de logout, șterg toate informațiile din sesiune
     @app.route('/logout')
     def logout():
         session.pop('loggedin', None)

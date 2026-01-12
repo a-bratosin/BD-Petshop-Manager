@@ -2,10 +2,12 @@ from datetime import datetime, timedelta
 
 from flask import render_template, request, redirect, url_for, session, flash
 
+# module pentru rutele angajaților
 
 def register(app):
     conn = app.config['DB_CONN']
 
+    # rută pentru panoul de control al angajaților
     @app.route('/employee-dashboard')
     def employee_dashboard():
         if not session.get('loggedin') or session.get('role') != 'employee':
@@ -13,12 +15,14 @@ def register(app):
             return redirect(url_for('login'))
         return render_template('employee_dashboard.html')
 
+    # rută pentru vizualizarea veniturilor și cheltuielilor într-un interval calendaristic introdus din formular
     @app.route('/revenues-expenses', methods=['GET', 'POST'])
     def revenues_expenses():
         if not session.get('loggedin') or session.get('role') != 'employee':
             flash("Unauthorized: This action requires employee privileges.")
             return redirect(url_for('login'))
 
+        # preluăm datele din formular 
         start_date_str = request.values.get('start_date', '').strip()
         end_date_str = request.values.get('end_date', '').strip()
 
@@ -32,6 +36,7 @@ def register(app):
                 else:
                     end_date = end_date + timedelta(days=1) - timedelta(seconds=1)
                     cursor = conn.cursor()
+                    # calculăm veniturile și cheltuielile în intervalul specificat
                     cursor.execute(
                         """
                         SELECT SUM(pc.ProdusComandaCantitate * p.Pret) AS TotalRevenue
@@ -74,7 +79,8 @@ def register(app):
             start_date=start_date_str,
             end_date=end_date_str
         )
-
+    
+    # rută pentru vizualizarea analizelor de date despre clienți, distribuitori și produse
     @app.route('/analytics')
     def analytics():
         if not session.get('loggedin') or session.get('role') != 'employee':
@@ -110,6 +116,7 @@ def register(app):
             orders_filter = "WHERE c.ComandaData >= ? AND c.ComandaData <= ?"
             orders_params = (customer_start, customer_end)
 
+        # analizăm clienții cei mai activi și cei care au cheltuit cei mai mulți bani
         cursor.execute(
             f"""
             SELECT TOP 1
@@ -136,6 +143,7 @@ def register(app):
                 "count": int(row.OrderCount),
             }
 
+        # analizăm clientul care a cheltuit cei mai mulți bani
         cursor.execute(
             f"""
             SELECT TOP 1
@@ -164,6 +172,7 @@ def register(app):
                 "total": float(row.TotalSpent) if row.TotalSpent is not None else 0.0,
             }
 
+        # analizăm distribuitorii cei mai activi și cei care au livrat cele mai multe produse
         cursor.execute(
             f"""
             SELECT TOP 1
@@ -185,7 +194,8 @@ def register(app):
                 "name": row.DistribuitorNume,
                 "count": int(row.DeliveryCount),
             }
-
+    
+        # analizăm distribuitorul care a livrat cele mai multe produse
         cursor.execute(
             f"""
             SELECT TOP 1
@@ -209,6 +219,7 @@ def register(app):
                 "quantity": int(row.QuantityTotal),
             }
 
+        # analizăm cele mai bine vândute produse după venituri
         cursor.execute(
             """
             SELECT TOP 5

@@ -1,5 +1,7 @@
 from flask import session
 
+# utilitare pentru gestionarea autentificării și autorizării utilizatorilor
+
 
 def is_customer_session():
     return session.get('loggedin') and session.get('role') == 'customer'

@@ -7,14 +7,17 @@ from flask import render_template, request, redirect, url_for, session, flash
 from utils.auth import allow_customer_or_guest
 from utils.catalog import fetch_categories, fetch_product_names, build_products
 
+# în acest modul definesc rutele pentru funcționalitățile disponibile clienților și vizitatorilor
 
 def register(app):
     conn = app.config['DB_CONN']
 
+    # ruta principală redirecționează către magazin
     @app.route("/")
     def hello_world():
         return redirect(url_for('customer_shop'))
 
+    # ruta pentru dashboard-ul clientului
     @app.route('/customer-dashboard')
     def customer_dashboard():
         if not session.get('loggedin') or session.get('role') != 'customer':
@@ -33,6 +36,7 @@ def register(app):
 
     @app.route('/shop')
     def customer_shop():
+        # verific dacă utilizatorul are drepturi de client sau vizitator
         if not allow_customer_or_guest():
             flash("Unauthorized: This action requires customer privileges.")
             return redirect(url_for('login'))
@@ -40,6 +44,8 @@ def register(app):
         if 'cart' not in session:
             session['cart'] = {}
 
+        # realizez aici o subcerere pentru a obține produsele cele mai bine vândute
+        # subcerere necorelată, deoarece nu am nevoie de alte informații din cererea principală
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -63,6 +69,8 @@ def register(app):
         )
         bestsellers = build_products(cursor.fetchall())
 
+        # selectez o categorie aleatorie și preiau până la 12 produse din acea categorie
+        # order by NEWID() este o metodă specifică SQL Server pentru a obține rezultate în ordine aleatorie
         cursor.execute(
             """
             SELECT TOP 1
@@ -100,6 +108,7 @@ def register(app):
             )
             category_products = build_products(cursor.fetchall())
 
+        # analog pentru subcategorie
         cursor.execute(
             """
             SELECT TOP 1
@@ -156,6 +165,7 @@ def register(app):
             is_guest=is_guest
         )
 
+    # aici implementez un search simplu pentru magazin, folosind LIKE în SQL
     @app.route('/shop/search')
     def customer_shop_search():
         if not allow_customer_or_guest():
@@ -212,6 +222,8 @@ def register(app):
             is_guest=is_guest
         )
 
+    # rută pentru vizualizarea produselor dintr-o anumită categorie
+    # preiau din id categoria, apoi numele categoriei și produsele aferente
     @app.route('/shop/category/<int:category_id>')
     def customer_category_view(category_id):
         if not allow_customer_or_guest():
@@ -258,6 +270,7 @@ def register(app):
                 "descriere": row.Descriere
             })
 
+        # 
         product_names = fetch_product_names(cursor)
         categories = fetch_categories(cursor)
         cart_count = sum(int(qty) for qty in session.get('cart', {}).values())
@@ -273,6 +286,7 @@ def register(app):
             is_guest=is_guest
         )
 
+    # analog pentru subcategorie
     @app.route('/shop/subcategory/<int:subcategory_id>')
     def customer_subcategory_view(subcategory_id):
         if not allow_customer_or_guest():
@@ -339,12 +353,14 @@ def register(app):
             is_guest=is_guest
         )
 
+    # rută pentru vizualizarea detaliilor pentru un produs
     @app.route('/product/<int:product_id>')
     def customer_product_details(product_id):
         if not allow_customer_or_guest():
             flash("Unauthorized: This action requires customer privileges.")
             return redirect(url_for('login'))
-
+        
+        # aici am nevoie doar de un select simplu pentru a prelua datele produsului
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -382,18 +398,21 @@ def register(app):
             categories=categories,
             is_guest=is_guest
         )
-
+    
+    # rută pentru vizualizarea coșului de cumpărături al utilizatorului curent
     @app.route('/cart')
     def customer_cart():
         if not allow_customer_or_guest():
             flash("Unauthorized: This action requires customer privileges.")
             return redirect(url_for('login'))
 
+        # elementele coșului sunt stocate în sesiune sub forma unui dicționar {product_id: quantity}
         cart = session.get('cart', {})
         cart_ids = [int(pid) for pid in cart.keys()] if cart else []
         items = []
         total = 0.0
 
+        # id-urile sunt preluate din coș, apoi realizez un select pentru a obține detaliile produselor
         if cart_ids:
             placeholders = ",".join("?" for _ in cart_ids)
             cursor = conn.cursor()
@@ -457,6 +476,8 @@ def register(app):
             "SELECT ProdusId, Stoc, Descriere FROM dbo.Produs WHERE ProdusId = ?",
             (product_id,)
         )
+
+        # verific dacă produsul există și dacă are stoc suficient
         row = cursor.fetchone()
         if not row:
             flash("Product not found.")
@@ -467,6 +488,7 @@ def register(app):
             flash("This product is currently out of stock.")
             return redirect(request.referrer or url_for('customer_shop'))
 
+        # dacă produsul există, adaug cantitatea în coș
         cart = session.get('cart', {})
         current_qty = int(cart.get(str(product_id), 0))
         if current_qty + quantity > available_stock:
@@ -480,6 +502,7 @@ def register(app):
         flash(f"Added '{row.Descriere}' to your cart.")
         return redirect(request.referrer or url_for('customer_shop'))
 
+    # rută pentru golirea coșului de cumpărături
     @app.route('/cart/clear', methods=['POST'])
     def customer_cart_clear():
         if not allow_customer_or_guest():
@@ -491,6 +514,8 @@ def register(app):
         flash("Cart cleared.")
         return redirect(url_for('customer_cart'))
 
+    # rută pentru eliminarea unui produs din coșul de cumpărături
+    # id-ul produsului este trimis prin formular
     @app.route('/cart/remove', methods=['POST'])
     def customer_cart_remove():
         if not allow_customer_or_guest():
@@ -512,6 +537,7 @@ def register(app):
 
         return redirect(url_for('customer_cart'))
 
+    # rută pentru incrementarea sau decrementarea cantității unui produs din coș
     @app.route('/cart/update', methods=['POST'])
     def customer_cart_update():
         if not allow_customer_or_guest():
@@ -539,7 +565,8 @@ def register(app):
             session['cart'] = cart
             session.modified = True
             return redirect(url_for('customer_cart'))
-
+        
+        # pentru incrementare, verific mai întâi stocul disponibil
         cursor = conn.cursor()
         cursor.execute("SELECT Stoc FROM dbo.Produs WHERE ProdusId = ?", (product_id,))
         row = cursor.fetchone()
@@ -547,6 +574,7 @@ def register(app):
             flash("Product not found.")
             return redirect(url_for('customer_cart'))
 
+        # dacă nu există suficient stoc, nu permit incrementarea
         available_stock = int(row.Stoc) if row.Stoc is not None else 0
         if current_qty + 1 > available_stock:
             flash("Not enough stock available for that quantity.")
@@ -558,6 +586,7 @@ def register(app):
 
         return redirect(url_for('customer_cart'))
 
+    # rută pentru confirmarea comenzii din coșul de cumpărături
     @app.route('/cart/confirm', methods=['POST'])
     def customer_cart_confirm():
         if not session.get('loggedin'):
@@ -585,6 +614,8 @@ def register(app):
             flash("Your cart is empty.")
             return redirect(url_for('customer_cart'))
 
+
+        # mai întâi extrag id-ul clientului asociat utilizatorului curent
         cursor = conn.cursor()
         cursor.execute(
             "SELECT ClientId FROM dbo.Client WHERE UserId = ?",
@@ -596,6 +627,7 @@ def register(app):
             return redirect(url_for('customer_cart'))
         client_id = client_row[0]
 
+        # verific disponibilitatea stocului pentru toate produsele din coș
         placeholders = ",".join("?" for _ in requested)
         cursor.execute(
             f"""
@@ -620,6 +652,8 @@ def register(app):
                 return redirect(url_for('customer_cart'))
 
         try:
+            # verific dacă clientul are card de fidelitate; dacă da, verific dacă clientul este suficient de vechi încât să primească discount
+            # dacă da, este păstrat într-un câmp separat în tabela Comanda, ReducereLoialitate
             cursor.execute(
                 """
                 SELECT DataInregistrarii
@@ -639,6 +673,7 @@ def register(app):
                 elif years_active > 2:
                     discount_pct = 3
 
+            # inserez comanda în tabela Comanda
             cursor.execute(
                 """
                 INSERT INTO dbo.Comanda (ComandaData, ClientId, AngajatId, ReducereLoialitate)
@@ -649,6 +684,7 @@ def register(app):
             )
             comanda_id = cursor.fetchone()[0]
 
+            # inserez fiecare produs din comanda în tabela ProdusComanda și actualizez stocul în tabela Produs
             for pid, qty in requested.items():
                 cursor.execute(
                     """
@@ -661,8 +697,10 @@ def register(app):
                     "UPDATE dbo.Produs SET Stoc = ? WHERE ProdusId = ?",
                     (products_by_id[pid] - qty, pid)
                 )
-
+            # confirm tranzacția
             conn.commit()
+
+            # elimin coșul din sesiune
             session['cart'] = {}
             session.modified = True
             if discount_pct:
@@ -674,6 +712,7 @@ def register(app):
             flash(f"An error occurred: {str(e)}")
             return redirect(url_for('customer_cart'))
 
+    # rută pentru vizualizarea istoricului comenzilor unui client
     @app.route('/customer-orders')
     def customer_orders():
         if not session.get('loggedin') or session.get('role') != 'customer':
@@ -720,6 +759,9 @@ def register(app):
             is_guest=False
         )
 
+
+    # rută pentru vizualizarea detaliilor unei comenzi specifice
+    # mai întâi extrag detaliile comenzii, apoi produsele aferente
     @app.route('/customer-order/<int:order_id>')
     def customer_order_details(order_id):
         if not session.get('loggedin') or session.get('role') != 'customer':
@@ -786,12 +828,15 @@ def register(app):
             is_guest=False
         )
 
+
+    # rută pentru vizualizarea detaliilor profilului clientului
     @app.route('/customer-details')
     def customer_details():
         if not session.get('loggedin') or session.get('role') != 'customer':
             flash("Unauthorized: This action requires customer privileges.")
             return redirect(url_for('login'))
 
+        # extrag mai întâi detaliile clientului
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -816,6 +861,7 @@ def register(app):
             flash("Customer record not found.")
             return redirect(url_for('customer_dashboard'))
 
+        # extrag datele pentru cardul de fidelitate, și calculez vechimea cardului și discount-ul aferent
         cursor.execute(
             """
             SELECT DataInregistrarii
@@ -877,7 +923,8 @@ def register(app):
             categories=categories,
             is_guest=False
         )
-
+    
+    # rută pentru editarea profilului clientului
     @app.route('/customer-edit-profile', methods=['GET', 'POST'])
     def customer_edit_profile():
         if not session.get('loggedin') or session.get('role') != 'customer':

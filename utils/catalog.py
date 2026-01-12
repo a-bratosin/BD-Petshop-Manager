@@ -1,5 +1,7 @@
 import base64
 
+# utilitare pentru gestionarea catalogului de produse și categorii
+# interogări simple, care sunt folosite în mai multe module
 
 def fetch_categories(cursor):
     cursor.execute(

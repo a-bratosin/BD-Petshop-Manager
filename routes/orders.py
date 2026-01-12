@@ -2,9 +2,11 @@ from datetime import datetime
 
 from flask import render_template, request, redirect, url_for, session, flash, jsonify
 
+# rute pentru gestionarea comenzilor
 
 def register(app):
     conn = app.config['DB_CONN']
+    
 
     @app.route('/create-order', methods=['GET', 'POST'])
     def create_order():
@@ -12,6 +14,7 @@ def register(app):
             flash("Unauthorized: This action requires employee privileges.")
             return redirect(url_for('login'))
 
+        # cerere pentru a obține lista de produse disponibile, care vor fi afișate în formular
         cursor = conn.cursor()
         cursor.execute("SELECT ProdusId, Descriere, Pret, Stoc FROM dbo.Produs")
         products = [
@@ -26,6 +29,7 @@ def register(app):
         ]
 
         if request.method == 'POST':
+            # mai întâi verificăm datele trimise de identificare a clientului și produsele comandate
             email = request.form.get('CustomerEmail', '').strip()
             product_names = [name.strip() for name in request.form.getlist('ProductName[]') if name.strip()]
             product_qtys = [qty.strip() for qty in request.form.getlist('ProductQty[]') if qty.strip()]
@@ -51,6 +55,7 @@ def register(app):
                 return redirect(request.url)
 
             try:
+                # obținem ID-ul clientului pe baza adresei de email
                 cursor.execute(
                     """
                     SELECT c.ClientId
@@ -81,6 +86,7 @@ def register(app):
                     key = name.strip()
                     requested[key] = requested.get(key, 0) + qty
 
+                # verificăm dacă produsele există și dacă există stoc suficient
                 placeholders = ",".join("?" for _ in requested)
                 cursor.execute(
                     f"""
@@ -106,6 +112,7 @@ def register(app):
 
                 now = datetime.now()
 
+                # extragem data înregistrării cardului de fidelitate pentru a calcula reducerea
                 cursor.execute(
                     """
                     SELECT DataInregistrarii
@@ -124,6 +131,8 @@ def register(app):
                     elif years_active > 2:
                         discount_pct = 3
 
+
+                # creăm comanda și actualizăm stocurile produselor
                 cursor.execute(
                     """
                     INSERT INTO dbo.Comanda (ComandaData, ClientId, AngajatId, ReducereLoialitate)
@@ -160,6 +169,8 @@ def register(app):
 
         return render_template('create_order.html', products=products)
 
+
+    # ruta pentru vizualizarea istoricului comenzilor
     @app.route('/order-history')
     def order_history():
         if not session.get('loggedin') or session.get('role') != 'employee':
@@ -167,6 +178,7 @@ def register(app):
             return redirect(url_for('login'))
 
         cursor = conn.cursor()
+        # extragem lista comenzilor cu detalii sumare, și calculăm prețul total al fiecărei comenzi
         cursor.execute(
             """
             SELECT
@@ -197,6 +209,7 @@ def register(app):
 
         return render_template('order_history.html', orders=orders)
 
+    # ruta pentru vizualizarea detaliilor unei comenzi
     @app.route('/order-details/<int:order_id>')
     def order_details(order_id):
         if not session.get('loggedin') or session.get('role') != 'employee':
@@ -224,7 +237,8 @@ def register(app):
         if not order_row:
             flash("Order not found.")
             return redirect(url_for('order_history'))
-
+        
+        # extragem detaliile produselor din comandă
         cursor.execute(
             """
             SELECT
@@ -259,6 +273,8 @@ def register(app):
 
         return render_template('order_details.html', order=order, items=items)
 
+
+    # ruta pentru ștergerea unei comenzi
     @app.route('/delete-order/<int:order_id>', methods=['POST'])
     def delete_order(order_id):
         if not session.get('loggedin') or session.get('role') != 'employee':
@@ -282,6 +298,7 @@ def register(app):
 
         return redirect(url_for('order_history'))
 
+    # ruta pentru calcularea reducerii de loialitate pe baza adresei de email
     @app.route('/loyalty-discount')
     def loyalty_discount():
         if not session.get('loggedin') or session.get('role') != 'employee':
@@ -290,7 +307,8 @@ def register(app):
         email = request.args.get('email', '').strip()
         if not email:
             return jsonify({"discount_pct": 0})
-
+        
+        # extragem data înregistrării cardului de fidelitate pentru a calcula reducerea
         cursor = conn.cursor()
         cursor.execute(
             """

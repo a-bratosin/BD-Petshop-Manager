@@ -6,11 +6,14 @@ from datetime import datetime
 from flask import render_template, request, redirect, url_for, session, flash
 from pyodbc import Binary
 
+# rute pentru gestionarea produselor, categoriilor, subcategoriilor și clienților
 
 def register(app):
     conn = app.config['DB_CONN']
     max_image_bytes = app.config['MAX_IMAGE_BYTES']
 
+
+    # ruta pentru crearea unui produs nou
     @app.route('/create-product', methods=['GET', 'POST'])
     def create_produs():
         if not session.get('loggedin'):
@@ -21,6 +24,7 @@ def register(app):
             flash("Unauthorized: This action requires employee privileges.")
             return redirect(url_for('login'))
 
+        # selectăm categoriile și subcategoriile disponibile pentru a le afișa în formular
         cursor = conn.cursor()
         cursor.execute("SELECT CategorieId, CategorieNume FROM dbo.Categorie")
         categories = [
@@ -36,6 +40,7 @@ def register(app):
 
         if request.method == 'POST':
             try:
+                # preluăm datele din formular
                 sub_id = request.form.get('SubcategorieId') or None
                 stoc = request.form.get('Stoc')
                 pret = request.form.get('Pret')
@@ -50,6 +55,7 @@ def register(app):
                         flash("Image file is too large. Max size is 5 MB.")
                         return redirect(request.url)
 
+                # inserăm produsul în baza de date
                 query = """
                     INSERT INTO dbo.Produs (SubcategorieId, Imagine, Stoc, Pret, Descriere, Cost)
                     VALUES (?, ?, ?, ?, ?, ?)
@@ -65,7 +71,8 @@ def register(app):
                 return redirect(request.url)
 
         return render_template('create_product.html', categories=categories, subcategories=subcategories)
-
+    
+    # ruta pentru crearea unei subcategorii noi
     @app.route('/create-subcategory', methods=['GET', 'POST'])
     def create_subcategory():
         if not session.get('loggedin'):
@@ -76,6 +83,7 @@ def register(app):
             flash("Unauthorized: This action requires employee privileges.")
             return redirect(url_for('login'))
 
+        # selectăm categoriile disponibile pentru a le afișa în formular
         cursor = conn.cursor()
         cursor.execute("SELECT CategorieId, CategorieNume FROM dbo.Categorie")
         categories = [
@@ -85,12 +93,15 @@ def register(app):
 
         if request.method == 'POST':
             try:
+                # preluăm datele din formular   
                 nume_subcategorie = request.form.get('SubcategorieNume')
                 categorie_id = request.form.get('CategorieId')
                 descriere_subcategorie = request.form.get('SubcategorieDescriere', '').strip() or None
                 if not nume_subcategorie or not categorie_id:
                     flash("All fields are required.")
                     return redirect(request.url)
+                
+                # inserăm subcategoria în baza de date
                 query = """
                     INSERT INTO dbo.Subcategorie (SubcategorieNume, CategorieId, SubcategorieDescriere)
                     VALUES (?, ?, ?)
@@ -106,6 +117,7 @@ def register(app):
 
         return render_template('create_subcategory.html', categories=categories)
 
+    # ruta pentru crearea unei categorii noi
     @app.route('/create-category', methods=['GET', 'POST'])
     def create_category():
         if not session.get('loggedin'):
@@ -118,6 +130,7 @@ def register(app):
 
         if request.method == 'POST':
             try:
+                # preluăm datele din formular
                 nume_categorie = request.form.get('CategorieNume')
                 if not nume_categorie:
                     flash("Category name is required.")
@@ -138,6 +151,8 @@ def register(app):
 
         return render_template('create_category.html')
 
+    # ruta pentru crearea unui client nou
+    # analog cu register, dar realizat de un angajat în interfața de administrare
     @app.route('/create-customer', methods=['GET', 'POST'])
     def create_customer():
         if not session.get('loggedin') or session.get('role') != 'employee':
@@ -145,6 +160,7 @@ def register(app):
             return redirect(url_for('login'))
 
         if request.method == 'POST':
+            # preluăm datele din formular
             nume = request.form.get('Nume')
             prenume = request.form.get('Prenume')
             email = request.form.get('Email')
@@ -163,6 +179,7 @@ def register(app):
                 flash("Passwords do not match.")
                 return redirect(request.url)
 
+            # validăm formatul datelor
             if not re.fullmatch(r'\d{10}', telefon):
                 flash("Phone number must be exactly 10 digits.")
                 return redirect(request.url)
@@ -170,6 +187,8 @@ def register(app):
                 flash("Invalid email address format.")
                 return redirect(request.url)
 
+
+            # verificăm unicitatea telefonului și email-ului
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM dbo.Client WHERE ClientTelefon = ?", (telefon,))
             exists = cursor.fetchone()[0]
@@ -183,6 +202,7 @@ def register(app):
                 flash("A user with this address already exists.")
                 return redirect(request.url)
             try:
+                # inserăm utilizatorul și clientul în baza de date
                 password_hash = hashlib.sha256(password.encode()).hexdigest()
                 cursor.execute("""
                     INSERT INTO dbo.Utilizatori (Username, Password, UserCategory)
@@ -199,6 +219,7 @@ def register(app):
                 cursor.execute(query, (user_id, nume, prenume, telefon, strada, numar, oras, judet))
                 client_id = cursor.fetchone()[0]
 
+                # dacă s-a bifat opțiunea, creăm și cardul de fidelitate
                 if request.form.get('CardFidelitate'):
                     now = datetime.now()
                     cursor.execute("""
@@ -216,6 +237,7 @@ def register(app):
 
         return render_template('create_customer.html')
 
+    # ruta pentru vizualizarea produselor
     @app.route('/view-products')
     def view_products():
         if not session.get('loggedin'):
@@ -265,6 +287,7 @@ def register(app):
 
         return render_template('view_products.html', products=products)
 
+    # ruta pentru vizualizarea clienților
     @app.route('/view-customers')
     def view_customers():
         if not session.get('loggedin'):
@@ -315,6 +338,8 @@ def register(app):
 
         return render_template('view_customers.html', customers=customers)
 
+
+    # ruta pentru editarea unui produs existent
     @app.route('/edit-product/<int:product_id>', methods=['GET', 'POST'])
     def edit_product(product_id):
         if not session.get('loggedin'):
@@ -325,6 +350,7 @@ def register(app):
             flash("Unauthorized: This action requires employee privileges.")
             return redirect(url_for('login'))
 
+        # preluăm datele produsului din baza de date pentru a le afișa în formular
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -334,6 +360,9 @@ def register(app):
             """,
             (product_id,)
         )
+        
+        #  fetchone deoarece ProdusId este unic
+        # nu ar trebui să ajungă în această rută dacă produsul nu există, dar verificăm pentru siguranță
         row = cursor.fetchone()
         if not row:
             flash("Product not found.")
