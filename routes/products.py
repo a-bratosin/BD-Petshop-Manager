@@ -87,14 +87,15 @@ def register(app):
             try:
                 nume_subcategorie = request.form.get('SubcategorieNume')
                 categorie_id = request.form.get('CategorieId')
+                descriere_subcategorie = request.form.get('SubcategorieDescriere', '').strip() or None
                 if not nume_subcategorie or not categorie_id:
                     flash("All fields are required.")
                     return redirect(request.url)
                 query = """
-                    INSERT INTO dbo.Subcategorie (SubcategorieNume, CategorieId)
-                    VALUES (?, ?)
+                    INSERT INTO dbo.Subcategorie (SubcategorieNume, CategorieId, SubcategorieDescriere)
+                    VALUES (?, ?, ?)
                 """
-                cursor.execute(query, (nume_subcategorie, categorie_id))
+                cursor.execute(query, (nume_subcategorie, categorie_id, descriere_subcategorie))
                 conn.commit()
                 flash("Subcategory created successfully!")
                 return redirect(url_for('create_subcategory'))

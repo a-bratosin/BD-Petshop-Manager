@@ -14,7 +14,12 @@
 
 <h1>Analytics</h1>
 
-<h2>Most Prolific Customers</h2>
+<h2>Most Prolific Customers ({{ customer_range_label }})</h2>
+<div class="range-toggle mb-3" role="group" aria-label="Customer analytics range">
+  <a class="btn btn-outline-primary {% if current_customer_range == 'month' %}active{% endif %}" href="{{ url_for('analytics', customer_range='month', delivery_range=current_delivery_range) }}">Past Month</a>
+  <a class="btn btn-outline-primary {% if current_customer_range == '6months' %}active{% endif %}" href="{{ url_for('analytics', customer_range='6months', delivery_range=current_delivery_range) }}">Past 6 Months</a>
+  <a class="btn btn-outline-primary {% if current_customer_range == 'all' %}active{% endif %}" href="{{ url_for('analytics', customer_range='all', delivery_range=current_delivery_range) }}">All Time</a>
+</div>
 <h3>By Number of Orders</h3>
 {% if prolific_by_orders %}
   <p><strong>{{ prolific_by_orders.name }}</strong> ({{ prolific_by_orders.email }})</p>
@@ -31,7 +36,12 @@
   <p>No order revenue yet.</p>
 {% endif %}
 
-<h2>Most Prolific Delivery Company</h2>
+<h2>Most Prolific Delivery Company ({{ delivery_range_label }})</h2>
+<div class="range-toggle mb-3" role="group" aria-label="Delivery analytics range">
+  <a class="btn btn-outline-primary {% if current_delivery_range == 'month' %}active{% endif %}" href="{{ url_for('analytics', customer_range=current_customer_range, delivery_range='month') }}">Past Month</a>
+  <a class="btn btn-outline-primary {% if current_delivery_range == '6months' %}active{% endif %}" href="{{ url_for('analytics', customer_range=current_customer_range, delivery_range='6months') }}">Past 6 Months</a>
+  <a class="btn btn-outline-primary {% if current_delivery_range == 'all' %}active{% endif %}" href="{{ url_for('analytics', customer_range=current_customer_range, delivery_range='all') }}">All Time</a>
+</div>
 {% if prolific_distributor %}
   <p><strong>{{ prolific_distributor.name }}</strong></p>
   <p>Deliveries: {{ prolific_distributor.count }}</p>

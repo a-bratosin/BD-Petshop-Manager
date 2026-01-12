@@ -279,7 +279,7 @@ def register(app):
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT s.SubcategorieNume, c.CategorieNume
+            SELECT s.SubcategorieNume, s.SubcategorieDescriere, c.CategorieNume
             FROM dbo.Subcategorie s
             JOIN dbo.Categorie c ON c.CategorieId = s.CategorieId
             WHERE s.SubcategorieId = ?
@@ -332,6 +332,7 @@ def register(app):
             product_names=product_names,
             categories=categories,
             heading=f"{sub_row.CategorieNume}/{sub_row.SubcategorieNume}",
+            subcategory_description=sub_row.SubcategorieDescriere.strip() if sub_row.SubcategorieDescriere else None,
             is_guest=is_guest
         )
 

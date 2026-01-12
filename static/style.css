@@ -17,6 +17,8 @@ body.app {
   color: var(--ink);
   margin: 0;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background:
     radial-gradient(circle at 12% 12%, rgba(255, 255, 255, 0.75) 0, rgba(255, 255, 255, 0) 45%),
     radial-gradient(circle at 85% 18%, rgba(143, 192, 169, 0.4) 0, rgba(143, 192, 169, 0) 55%),
@@ -31,6 +33,9 @@ body.app {
   border-radius: 20px;
   padding: 24px;
   margin: 24px auto;
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 h1,
@@ -139,6 +144,23 @@ a:hover {
   line-height: 1;
   cursor: pointer;
   padding: 0 2px;
+}
+
+.site-footer {
+  margin-top: auto;
+  padding: 14px 18px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: rgba(47, 62, 56, 0.8);
+  background: rgba(255, 253, 245, 0.7);
+  border-radius: 14px;
+  border: 1px solid rgba(47, 62, 56, 0.08);
+  border-top: 2px solid rgba(143, 192, 169, 0.6);
+}
+
+.site-footer span {
+  display: inline-block;
+  margin: 2px 8px;
 }
 
 @keyframes flashFade {
@@ -256,4 +278,17 @@ table th {
 .flash-inline {
   color: var(--pine);
   font-weight: 600;
+}
+
+.range-toggle {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 320px;
+}
+
+.range-toggle .btn {
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  box-shadow: 0 8px 16px rgba(47, 62, 56, 0.12);
 }

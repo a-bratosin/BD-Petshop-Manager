@@ -64,6 +64,10 @@
 {% set search_query = "" %}
 {% include "_customer_shop_header.html" %}
 
+{% if subcategory_description %}
+  <p>{{ subcategory_description }}</p>
+{% endif %}
+
 {% if products %}
   <div class="shop-grid">
     {% for product in products %}

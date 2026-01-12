@@ -92,9 +92,36 @@ def register(app):
             return redirect(url_for('login'))
 
         cursor = conn.cursor()
+        range_options = {
+            "month": ("Past Month", timedelta(days=30)),
+            "6months": ("Past 6 Months", timedelta(days=183)),
+            "all": ("All Time", None),
+        }
+
+        def resolve_range(range_key):
+            key = range_key.strip().lower()
+            if key not in range_options:
+                key = "all"
+            label, delta = range_options[key]
+            if delta is None:
+                return key, label, None, None
+            end_date = datetime.now()
+            start_date = end_date - delta
+            return key, label, start_date, end_date
+
+        customer_range_key = request.args.get('customer_range', 'all')
+        delivery_range_key = request.args.get('delivery_range', 'all')
+        current_customer_range, customer_range_label, customer_start, customer_end = resolve_range(customer_range_key)
+        current_delivery_range, delivery_range_label, delivery_start, delivery_end = resolve_range(delivery_range_key)
+
+        orders_filter = ""
+        orders_params = ()
+        if customer_start is not None and customer_end is not None:
+            orders_filter = "WHERE c.ComandaData >= ? AND c.ComandaData <= ?"
+            orders_params = (customer_start, customer_end)
 
         cursor.execute(
-            """
+            f"""
             SELECT TOP 1
                 cl.ClientId,
                 cl.ClientNume,
@@ -104,9 +131,11 @@ def register(app):
             FROM dbo.Comanda c
             JOIN dbo.Client cl ON cl.ClientId = c.ClientId
             JOIN dbo.Utilizatori u ON u.UserId = cl.UserId
+            {orders_filter}
             GROUP BY cl.ClientId, cl.ClientNume, cl.ClientPrenume, u.Username
             ORDER BY COUNT(*) DESC, cl.ClientId
-            """
+            """,
+            orders_params
         )
         row = cursor.fetchone()
         prolific_by_orders = None
@@ -118,7 +147,7 @@ def register(app):
             }
 
         cursor.execute(
-            """
+            f"""
             SELECT TOP 1
                 cl.ClientId,
                 cl.ClientNume,
@@ -130,9 +159,11 @@ def register(app):
             JOIN dbo.Produs p ON p.ProdusId = pc.ProdusId
             JOIN dbo.Client cl ON cl.ClientId = c.ClientId
             JOIN dbo.Utilizatori u ON u.UserId = cl.UserId
+            {orders_filter}
             GROUP BY cl.ClientId, cl.ClientNume, cl.ClientPrenume, u.Username
             ORDER BY SUM(pc.ProdusComandaCantitate * p.Pret) DESC, cl.ClientId
-            """
+            """,
+            orders_params
         )
         row = cursor.fetchone()
         prolific_by_spend = None
@@ -144,16 +175,18 @@ def register(app):
             }
 
         cursor.execute(
-            """
+            f"""
             SELECT TOP 1
                 d.DistribuitorId,
                 d.DistribuitorNume,
                 COUNT(l.LivrareId) AS DeliveryCount
             FROM dbo.Distribuitor d
             LEFT JOIN dbo.Livrare l ON l.DistribuitorId = d.DistribuitorId
+            {"AND l.DataLivrare >= ? AND l.DataLivrare <= ?" if delivery_start is not None and delivery_end is not None else ""}
             GROUP BY d.DistribuitorId, d.DistribuitorNume
             ORDER BY COUNT(l.LivrareId) DESC, d.DistribuitorId
-            """
+            """,
+            (delivery_start, delivery_end) if delivery_start is not None and delivery_end is not None else ()
         )
         row = cursor.fetchone()
         prolific_distributor = None
@@ -164,17 +197,19 @@ def register(app):
             }
 
         cursor.execute(
-            """
+            f"""
             SELECT TOP 1
                 d.DistribuitorId,
                 d.DistribuitorNume,
                 SUM(pl.ProdusLivrareCantitate) AS QuantityTotal
             FROM dbo.Distribuitor d
             LEFT JOIN dbo.Livrare l ON l.DistribuitorId = d.DistribuitorId
+            {"AND l.DataLivrare >= ? AND l.DataLivrare <= ?" if delivery_start is not None and delivery_end is not None else ""}
             LEFT JOIN dbo.ProdusLivrare pl ON pl.LivrareId = l.LivrareId
             GROUP BY d.DistribuitorId, d.DistribuitorNume
             ORDER BY SUM(pl.ProdusLivrareCantitate) DESC, d.DistribuitorId
-            """
+            """,
+            (delivery_start, delivery_end) if delivery_start is not None and delivery_end is not None else ()
         )
         row = cursor.fetchone()
         prolific_distributor_qty = None
@@ -212,5 +247,9 @@ def register(app):
             prolific_by_spend=prolific_by_spend,
             prolific_distributor=prolific_distributor,
             prolific_distributor_qty=prolific_distributor_qty,
-            top_products=top_products
+            top_products=top_products,
+            current_customer_range=current_customer_range,
+            customer_range_label=customer_range_label,
+            current_delivery_range=current_delivery_range,
+            delivery_range_label=delivery_range_label
         )
