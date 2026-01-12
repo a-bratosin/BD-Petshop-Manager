@@ -104,10 +104,12 @@ def register(app):
             """
             SELECT TOP 1
                 s.SubcategorieId,
-                s.SubcategorieNume
+                s.SubcategorieNume,
+                c.CategorieNume
             FROM dbo.Subcategorie s
+            JOIN dbo.Categorie c ON c.CategorieId = s.CategorieId
             JOIN dbo.Produs p ON p.SubcategorieId = s.SubcategorieId
-            GROUP BY s.SubcategorieId, s.SubcategorieNume
+            GROUP BY s.SubcategorieId, s.SubcategorieNume, c.CategorieNume
             ORDER BY NEWID()
             """
         )
@@ -117,7 +119,8 @@ def register(app):
         if subcategory_row:
             random_subcategory = {
                 "id": subcategory_row.SubcategorieId,
-                "name": subcategory_row.SubcategorieNume
+                "name": subcategory_row.SubcategorieNume,
+                "category_name": subcategory_row.CategorieNume
             }
             cursor.execute(
                 """

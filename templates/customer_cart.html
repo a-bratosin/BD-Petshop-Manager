@@ -105,7 +105,7 @@
             {% endif %}
             {{ item.descriere }}
           </td>
-          <td>${{ "{:,.2f}".format(item.price) }}</td>
+          <td>{{ "{:,.2f}".format(item.price) }} lei</td>
           <td>
             <div class="qty-controls">
               <form method="post" action="/cart/update">
@@ -121,7 +121,7 @@
               </form>
             </div>
           </td>
-          <td>${{ "{:,.2f}".format(item.line_total) }}</td>
+          <td>{{ "{:,.2f}".format(item.line_total) }} lei</td>
           <td>
             <form method="post" action="/cart/remove">
               <input type="hidden" name="product_id" value="{{ item.id }}">
@@ -132,7 +132,7 @@
       {% endfor %}
     </tbody>
   </table>
-  <div class="cart-total">Total: ${{ "{:,.2f}".format(total) }}</div>
+  <div class="cart-total">Total: {{ "{:,.2f}".format(total) }} lei</div>
   <div class="cart-actions">
     {% if is_guest %}
       <button type="button" onclick="guestCheckoutPrompt()">Confirm order</button>

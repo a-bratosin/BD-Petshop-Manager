@@ -80,18 +80,13 @@
   .carousel-btn {
     width: 36px;
     height: 36px;
-    border-radius: 50%;
-    border: 1px solid #ccc;
-    background: #fff;
+    padding: 0;
     font-size: 20px;
     line-height: 1;
-    cursor: pointer;
+    border-radius: 50%;
   }
   .carousel-btn:disabled {
-    cursor: not-allowed;
-    color: #aaa;
-    border-color: #e0e0e0;
-    background: #f7f7f7;
+    opacity: 0.5;
   }
   .shop-empty {
     margin: 0;
@@ -123,8 +118,8 @@
   <div class="shop-section-header">
     <h2>Bestsellers</h2>
     <div class="shop-carousel-controls">
-      <button class="carousel-btn prev" type="button" aria-label="Previous items" disabled>&lsaquo;</button>
-      <button class="carousel-btn next" type="button" aria-label="Next items">&rsaquo;</button>
+      <button class="btn btn-outline-secondary btn-sm carousel-btn prev" type="button" aria-label="Previous items" disabled>&lsaquo;</button>
+      <button class="btn btn-outline-secondary btn-sm carousel-btn next" type="button" aria-label="Next items">&rsaquo;</button>
     </div>
   </div>
   {% if bestsellers %}
@@ -140,7 +135,7 @@
             <h3>{{ product.descriere }}</h3>
           </a>
           <div class="shop-meta">
-            <span>${{ "{:,.2f}".format(product.pret) }}</span>
+            <span>{{ "{:,.2f}".format(product.pret) }} lei</span>
             <span>Stock: {{ product.stoc }}</span>
           </div>
           <form method="post" action="/cart/add">
@@ -160,8 +155,8 @@
     <div class="shop-section-header">
       <h2>Items in {{ random_category.name }}</h2>
       <div class="shop-carousel-controls">
-        <button class="carousel-btn prev" type="button" aria-label="Previous items" disabled>&lsaquo;</button>
-        <button class="carousel-btn next" type="button" aria-label="Next items">&rsaquo;</button>
+        <button class="btn btn-outline-secondary btn-sm carousel-btn prev" type="button" aria-label="Previous items" disabled>&lsaquo;</button>
+        <button class="btn btn-outline-secondary btn-sm carousel-btn next" type="button" aria-label="Next items">&rsaquo;</button>
       </div>
     </div>
     {% if category_products %}
@@ -177,7 +172,7 @@
               <h3>{{ product.descriere }}</h3>
             </a>
             <div class="shop-meta">
-              <span>${{ "{:,.2f}".format(product.pret) }}</span>
+              <span>{{ "{:,.2f}".format(product.pret) }} lei</span>
               <span>Stock: {{ product.stoc }}</span>
             </div>
             <form method="post" action="/cart/add">
@@ -198,10 +193,10 @@
 <div class="shop-section">
   {% if random_subcategory %}
     <div class="shop-section-header">
-      <h2>Items in {{ random_subcategory.name }}</h2>
+      <h2>Items in {{ random_subcategory.category_name }}/{{ random_subcategory.name }}</h2>
       <div class="shop-carousel-controls">
-        <button class="carousel-btn prev" type="button" aria-label="Previous items" disabled>&lsaquo;</button>
-        <button class="carousel-btn next" type="button" aria-label="Next items">&rsaquo;</button>
+        <button class="btn btn-outline-secondary btn-sm carousel-btn prev" type="button" aria-label="Previous items" disabled>&lsaquo;</button>
+        <button class="btn btn-outline-secondary btn-sm carousel-btn next" type="button" aria-label="Next items">&rsaquo;</button>
       </div>
     </div>
     {% if subcategory_products %}
@@ -217,7 +212,7 @@
               <h3>{{ product.descriere }}</h3>
             </a>
             <div class="shop-meta">
-              <span>${{ "{:,.2f}".format(product.pret) }}</span>
+              <span>{{ "{:,.2f}".format(product.pret) }} lei</span>
               <span>Stock: {{ product.stoc }}</span>
             </div>
             <form method="post" action="/cart/add">
@@ -248,11 +243,9 @@
       const atStart = carousel.scrollLeft <= 1;
       const atEnd = carousel.scrollLeft >= maxScroll - 1;
       const hasOverflow = maxScroll > 1;
-      const totalItems = carousel.querySelectorAll('.shop-card').length;
-      const tooFew = totalItems < 12;
 
-      prev.disabled = tooFew || !hasOverflow || atStart;
-      next.disabled = tooFew || !hasOverflow || atEnd;
+      prev.disabled = !hasOverflow || atStart;
+      next.disabled = !hasOverflow || atEnd;
     };
 
     prev.addEventListener('click', () => {

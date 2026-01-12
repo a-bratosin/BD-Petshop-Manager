@@ -81,7 +81,7 @@
           <h3>{{ product.descriere }}</h3>
         </a>
         <div class="shop-meta">
-          <span>${{ "{:,.2f}".format(product.pret) }}</span>
+          <span>{{ "{:,.2f}".format(product.pret) }} lei</span>
           <span>Stock: {{ product.stoc }}</span>
         </div>
         <form method="post" action="/cart/add">

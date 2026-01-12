@@ -65,7 +65,7 @@
   {% endif %}
   <h2>{{ product.descriere }}</h2>
   <div class="product-meta">
-    <span>Price: ${{ "{:,.2f}".format(product.pret) }}</span>
+    <span>Price: {{ "{:,.2f}".format(product.pret) }} lei</span>
     <span>Stock: {{ product.stoc }}</span>
   </div>
   <form class="product-actions" method="post" action="/cart/add">
