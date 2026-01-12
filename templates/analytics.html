@@ -57,7 +57,12 @@
   <p>No deliveries yet.</p>
 {% endif %}
 
-<h2>Top 5 Products by Revenue</h2>
+<h2>Top 5 Products by Revenue ({{ top_products_range_label }})</h2>
+<div class="range-toggle mb-3" role="group" aria-label="Top products analytics range">
+  <a class="btn btn-outline-primary {% if current_top_products_range == 'month' %}active{% endif %}" href="{{ url_for('analytics', customer_range=current_customer_range, delivery_range=current_delivery_range, low_turnover_range=current_low_turnover_range, top_products_range='month') }}">Past Month</a>
+  <a class="btn btn-outline-primary {% if current_top_products_range == '6months' %}active{% endif %}" href="{{ url_for('analytics', customer_range=current_customer_range, delivery_range=current_delivery_range, low_turnover_range=current_low_turnover_range, top_products_range='6months') }}">Past 6 Months</a>
+  <a class="btn btn-outline-primary {% if current_top_products_range == 'all' %}active{% endif %}" href="{{ url_for('analytics', customer_range=current_customer_range, delivery_range=current_delivery_range, low_turnover_range=current_low_turnover_range, top_products_range='all') }}">All Time</a>
+</div>
 {% if top_products %}
   <table class="table table-striped table-hover">
     <tr>
