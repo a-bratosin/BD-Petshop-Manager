@@ -155,10 +155,14 @@ def register(app):
         customer_range_key = request.args.get('customer_range', 'all')
         delivery_range_key = request.args.get('delivery_range', 'all')
         low_turnover_range_key = request.args.get('low_turnover_range', 'all')
+        top_products_range_key = request.args.get('top_products_range', 'all')
         current_customer_range, customer_range_label, customer_start, customer_end = resolve_range(customer_range_key)
         current_delivery_range, delivery_range_label, delivery_start, delivery_end = resolve_range(delivery_range_key)
         current_low_turnover_range, low_turnover_range_label, low_turnover_start, low_turnover_end = resolve_range(
             low_turnover_range_key
+        )
+        current_top_products_range, top_products_range_label, top_products_start, top_products_end = resolve_range(
+            top_products_range_key
         )
 
         orders_filter = ""
@@ -271,17 +275,26 @@ def register(app):
             }
 
         # analizăm cele mai bine vândute produse după venituri
+        top_products_filter = ""
+        top_products_params = ()
+        if top_products_start is not None and top_products_end is not None:
+            top_products_filter = "WHERE c.ComandaData >= ? AND c.ComandaData <= ?"
+            top_products_params = (top_products_start, top_products_end)
+
         cursor.execute(
-            """
+            f"""
             SELECT TOP 5
                 p.ProdusId,
                 p.Descriere,
                 SUM(pc.ProdusComandaCantitate * p.Pret) AS Revenue
             FROM dbo.Produs p
             JOIN dbo.ProdusComanda pc ON pc.ProdusId = p.ProdusId
+            JOIN dbo.Comanda c ON c.ComandaId = pc.ComandaId
+            {top_products_filter}
             GROUP BY p.ProdusId, p.Descriere
             ORDER BY SUM(pc.ProdusComandaCantitate * p.Pret) DESC, p.ProdusId
-            """
+            """,
+            top_products_params
         )
         rows = cursor.fetchall()
         top_products = [
@@ -342,5 +355,7 @@ def register(app):
             current_delivery_range=current_delivery_range,
             delivery_range_label=delivery_range_label,
             current_low_turnover_range=current_low_turnover_range,
-            low_turnover_range_label=low_turnover_range_label
+            low_turnover_range_label=low_turnover_range_label,
+            current_top_products_range=current_top_products_range,
+            top_products_range_label=top_products_range_label
         )
