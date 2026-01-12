@@ -234,6 +234,7 @@ def register(app):
                 p.Imagine,
                 p.Stoc,
                 p.Pret,
+                p.Cost,
                 p.Descriere,
                 s.SubcategorieNume,
                 c.CategorieNume
@@ -258,6 +259,7 @@ def register(app):
                 "image": image_base64,
                 "stoc": row.Stoc,
                 "pret": row.Pret,
+                "cost": row.Cost,
                 "descriere": row.Descriere
             })
 

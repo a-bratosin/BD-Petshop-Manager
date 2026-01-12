@@ -12,6 +12,7 @@
             <th>Description</th>
             <th>Category/Subcategory</th>
             <th>Price</th>
+            <th>Cost</th>
             <th>Stock</th>
             <th>Actions</th>
         </tr>
@@ -40,6 +41,7 @@
                 {% endif %}
             </td>
             <td>{{ "{:,.2f}".format(product.pret) }} lei</td>
+            <td>{{ "{:,.2f}".format(product.cost) }} lei</td>
             <td>{{ product.stoc }}</td>
             <td>
                 <a href="/edit-product/{{ product.id }}">Edit</a>
