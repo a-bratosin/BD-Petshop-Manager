@@ -1,0 +1,49 @@
+{% include '_page_start.html' %}
+
+{% include '_employee_header.html' %}
+
+<h1>Add Delivery Company</h1>
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li><span>{{ message }}</span><button class="flash-close" type="button" aria-label="Close">&times;</button></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+<form action="/create-distributor" method="POST">
+    <div>
+        <label for="DistribuitorNume">Company Name:</label>
+        <input type="text" name="DistribuitorNume" id="DistribuitorNume" required>
+    </div>
+    <div>
+        <label for="DistribuitorTelefon">Phone:</label>
+        <input type="text" name="DistribuitorTelefon" id="DistribuitorTelefon">
+    </div>
+    <div>
+        <label for="DistribuitorEmail">Email:</label>
+        <input type="email" name="DistribuitorEmail" id="DistribuitorEmail">
+    </div>
+    <div>
+        <label for="DistribuitorStrada">Street:</label>
+        <input type="text" name="DistribuitorStrada" id="DistribuitorStrada">
+    </div>
+    <div>
+        <label for="DistribuitorNumar">Number:</label>
+        <input type="text" name="DistribuitorNumar" id="DistribuitorNumar">
+    </div>
+    <div>
+        <label for="DistribuitorOras">City:</label>
+        <input type="text" name="DistribuitorOras" id="DistribuitorOras">
+    </div>
+    <div>
+        <label for="DistribuitorJudet">County:</label>
+        <input type="text" name="DistribuitorJudet" id="DistribuitorJudet">
+    </div>
+    <button type="submit">Add Company</button>
+</form>
+
+{% include '_page_end.html' %}

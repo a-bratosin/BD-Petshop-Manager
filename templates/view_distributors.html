@@ -1,0 +1,49 @@
+{% include '_page_start.html' %}
+
+{% with messages = get_flashed_messages() %}
+  {% if messages %}
+    <ul class="flashes">
+      {% for message in messages %}
+        <li><span>{{ message }}</span><button class="flash-close" type="button" aria-label="Close">&times;</button></li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+{% endwith %}
+
+{% include '_employee_header.html' %}
+
+<h2>Delivery Company List</h2>
+
+<table class="table table-striped table-hover">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Company Name</th>
+            <th>Phone</th>
+            <th>Email</th>
+            <th>Address</th>
+            <th>City</th>
+            <th>County</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for distributor in distributors %}
+        <tr>
+            <td>{{ distributor.id }}</td>
+            <td>{{ distributor.name }}</td>
+            <td>{{ distributor.phone or 'N/A' }}</td>
+            <td>{{ distributor.email or 'N/A' }}</td>
+            <td>{{ distributor.address }}</td>
+            <td>{{ distributor.city or 'N/A' }}</td>
+            <td>{{ distributor.county or 'N/A' }}</td>
+            <td><a href="/edit-distributor/{{ distributor.id }}">Edit Distributor</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<br>
+<a href="/create-distributor">Add Company</a>
+
+{% include '_page_end.html' %}
